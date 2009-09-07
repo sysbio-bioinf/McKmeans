@@ -1,0 +1,35 @@
+HOWTO build
+
+1. start clojure:
+
+java -cp .:./classes:./src:lib/clojure.jar:lib/clojure-contrib.jar:lib/colt.jar:lib/lap.jar:lib/jcommon-1.0.16.jar:lib/jfreechart-1.0.13.jar:lib/batik-awt-util.jar:lib/batik-dom.jar:lib/batik-svggen.jar:lib/batik-util.jar:lib/batik-xml.jar clojure.lang.Repl
+
+2. compile clojure code:
+
+(compile 'mckmeans.utils)
+(compile 'mckmeans.kmeans)
+(compile 'mckmeans.cne)
+(compile 'mckmeans.gui)
+
+3. include libraries:
+
+unzip lib/lap.jar -d classes/.
+unzip lib/jfreechart-1.0.13.jar -d classes/.
+unzip lib/jcommon-1.0.16.jar -d classes/.
+unzip lib/clojure.jar -d classes/.
+unzip lib/clojure-contrib.jar -d classes/.
+unzip lib/colt.jar -d classes/.
+unzip lib/batik-awt-util.jar -d classes/.
+unzip lib/batik-dom.jar -d classes/.
+unzip lib/batik-svggen.jar -d classes/.
+unzip lib/batik-util.jar -d classes/.
+unzip lib/batik-xml.jar -d classes/.
+rm -rf classes/META-INF
+
+4. build jar:
+
+jar cmf manifest.txt McKmeans.jar -C classes .
+
+5. enjoy:
+
+java -jar McKmeans.jar
