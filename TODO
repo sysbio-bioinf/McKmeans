@@ -1,0 +1,10 @@
+gui:
+1. File save dialog: set preferred path
+2. assignment algorithm: change to other java implementation ->
+   enables compilation with java 1.5
+3. statusbar: update statusbar before running tasks
+4. running tasks in background
+
+kmeans:
+1. investigate linear speedup problem
+2. eliminate reflection warnings
