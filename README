@@ -1,5 +1,7 @@
 HOWTO build
 
+0. create directory called classes
+
 1. start clojure:
 
 java -cp .:./classes:./src:lib/clojure.jar:lib/clojure-contrib.jar:lib/colt.jar:lib/lap.jar:lib/jcommon-1.0.16.jar:lib/jfreechart-1.0.13.jar:lib/batik-awt-util.jar:lib/batik-dom.jar:lib/batik-svggen.jar:lib/batik-util.jar:lib/batik-xml.jar clojure.lang.Repl
