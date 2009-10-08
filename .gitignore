@@ -1,3 +1,5 @@
 classes/*
+!classes/.gitignore
 McKmeans.jar
+.DS_STORE
 *~
