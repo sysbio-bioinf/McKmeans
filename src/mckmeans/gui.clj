@@ -7,7 +7,8 @@
   #^{:author "Johann M. Kraus",
      :doc "Multi-core kmeans cluster application"}
 ;  (:refer-clojure)
-  (:use (mckmeans kmeans utils cne))
+  (:use (mckmeans kmeans utils cne)
+	clojure.contrib.command-line)
   (:import (javax.swing JFrame JLabel JButton JPanel JMenuBar JMenu JMenuItem JFileChooser JTextField JCheckBox JTextArea JScrollPane)
 	   (java.awt.event ActionListener KeyListener)
 	   (java.awt FlowLayout GridLayout BorderLayout Color)
@@ -28,6 +29,7 @@
 (def *K* (ref 2))
 (def *MAXITER* (ref 10))
 (def *ERUNS* (ref 10))
+(def *CNEMAX* (ref 10))
 (def *DIMX* (ref 0))
 (def *DIMY* (ref 1))
 
@@ -568,6 +570,47 @@
 			(. setVisible true))))
 
 
+(defn runKmeans [outfile]
+  (let [res (kmeans @*DATASET* @*K* @*MAXITER*)
+	restext (.. (pr-str (:cluster res)) (replace "(" "") (replace ")" ""))]
+    (save-result outfile restext)))
 
+(defn runCNE [outfile cneoutfile]
+  (let [ks (drop 2 (range (inc @*CNEMAX*)))
+	clusterresults (calculate-mca-results @*DATASET* @*ERUNS* ks @*MAXITER*)
+	baselineresults (calculate-mca-baselines @*DATASET* @*ERUNS* ks)
+	bestk (get-best-k clusterresults baselineresults)
+	res (kmeans @*DATASET* bestk @*MAXITER*)
+	restext (.. (pr-str (:cluster res)) (replace "(" "") (replace ")" ""))]
+    (save-clusternumber-result clusterresults baselineresults cneoutfile)
+    (save-result outfile restext)))
 
-(defn -main [& args] (runGUI))
+(defn runCMD [infile outfile k maxiter cne? cnemax cneruns cneoutfile]
+  (dosync (ref-set *DATASET* (load-tab-file infile)))
+  (dosync (ref-set *K* k))
+  (dosync (ref-set *MAXITER* maxiter))
+  (dosync (ref-set *ERUNS* cneruns))
+  (dosync (ref-set *CNEMAX* cnemax))
+  (if cne?
+    (do (println "Starting McKmeans cluster number estimation. Find the output in " outfile " and " cneoutfile)
+	(runCNE outfile cneoutfile))
+    (do (println "Starting McKmeans analysis. Find the output in " outfile)
+	(runKmeans outfile)))
+  (System/exit 0))
+
+(defn -main [& args] 
+  (if (nil? args)
+    (runGUI)
+    (with-command-line args
+      "Command line demo"
+      [[infile i "The name of the input file."]
+       [outfile o "The name of the output file." "clustering.txt"]
+       [k "The number of clusters" 2]
+       [maxiter "The maximum number of iterations allowed." 10]
+       [cne? "Run a cluster number estimation? This is a boolean flag."]
+       [cnemax "The maximal number of clusters for the cluster number estimation." 10]
+       [cneruns "The number of repeated runs of clusterings for each partitioning." 10]
+       [cneoutfile co "The name of the output file for the cluster number estimation." "cne.txt"]]
+      (if (nil? infile)
+	(println "Please provide a valid input file.")
+	(runCMD infile outfile k maxiter cne? cnemax cneruns cneoutfile)))))
