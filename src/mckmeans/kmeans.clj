@@ -7,6 +7,7 @@
   (:use mckmeans.utils clojure.contrib.seq-utils)
   (:gen-class))
 
+;(use '(clojure.contrib seq-utils))
 
 (def *NUMAGENTS* (ref (.. Runtime getRuntime availableProcessors)))
 
@@ -62,13 +63,17 @@
 ;;;; ASSIGNMENT ;;;;
 (defn search-best-cluster
   "Search the number of the nearest center"
-  [point cluster-agents]
-  (let [dist (double-array (map #(distance (:data point) (:data (deref %))) cluster-agents))]
-    (whichmin dist)))
+  [point cluster-agents snp]
+  (if-not snp
+    (let [dist (double-array (map #(distance (:data point) (:data (deref %))) cluster-agents))]
+      (whichmin dist))
+    (let [dist (double-array (map #(distance-snp (:data point) (:data (deref %))) cluster-agents))]
+      (whichmin dist))))
+
 
 (defn update-datapoint
-  [point cluster-agents member-refs stop]
-  (let [newass (search-best-cluster point cluster-agents)]
+  [point cluster-agents member-refs stop snp]
+  (let [newass (search-best-cluster point cluster-agents snp)]
     (dosync (commute stop conj (= (:assignment point) newass)))
     (dosync (commute (nth member-refs newass) conj (:data point)))
     (assoc point :assignment newass)))
@@ -78,38 +83,41 @@
    change their assignment value to the corresponding cluster number,
    add their data to the corresponding cluster-members reference (commute the ref), and
    add a note whether a change was necessary to the stop (commute the ref) for each update-datapoint"
-  [datalist cluster-agents member-refs stop]
+  [datalist cluster-agents member-refs stop snp]
   ;(doall (pmap update-datapoint datalist))); slower
-  (doall (map #(update-datapoint %1 cluster-agents member-refs stop) datalist)))
+  (doall (map #(update-datapoint %1 cluster-agents member-refs stop snp) datalist)))
 
 (defn assignment
   "Tell data-agents to update. Wait until all agents finished"
-  [stop data-agents cluster-agents member-refs]
+  [stop data-agents cluster-agents member-refs snp]
   (dosync (ref-set stop '()))
-  (dorun (map #(send % (fn [x] (update-data-agent x cluster-agents member-refs stop))) data-agents))
+  (dorun (map #(send % (fn [x] (update-data-agent x cluster-agents member-refs stop snp))) data-agents))
   (apply await data-agents))
 
 ;;;; UPDATE ;;;;
-(defn update-centerpoint [members]
-  (let [scale (double (count members))
-	#^doubles newcen (reduce da+ members)]
-    (amap newcen i ret
-	  (/ (aget newcen i) scale))))
+(defn update-centerpoint [members snp]
+  (if-not snp
+    (let [scale (double (count members))
+	  #^doubles newcen (reduce da+ members)]
+      (amap newcen i ret
+	    (/ (aget newcen i) scale)))
+    (let [#^ints newcen (reduce #(da-snp-freq %1 %2) (int-array (* 3 (alength (first members)))) members)]
+      (da-snp-mode newcen))))
 
 (defn update-cluster-agent
   "A cluster-agent should calculate its new center from its corresponding cluster-members,
    change its data vector to the new center, and
    clear cluster-members"
-  [clus member-refs]
+  [clus member-refs snp]
   (let [mem (deref (nth member-refs (:number clus)))
-	newcen (update-centerpoint mem)]
+	newcen (update-centerpoint mem snp)]
     (dosync (ref-set (nth member-refs (:number clus)) '()))
     (assoc clus :data newcen)))
 
 (defn update
   "Tell cluster-agents to update. Wait until all agents finished"
-  [cluster-agents member-refs]
-  (dorun (map #(send % (fn [x] (update-cluster-agent x member-refs))) cluster-agents))
+  [cluster-agents member-refs snp]
+  (dorun (map #(send % (fn [x] (update-cluster-agent x member-refs snp))) cluster-agents))
   (apply await cluster-agents))
 
 ;;;; KMEANS ;;;;
@@ -132,13 +140,13 @@
 
 (defn kmeans
   "Run Kmeans"
-  [dat k maxiter]
+  [dat k maxiter snp]
   (let [stop (init-stop)
 	data-agents (init-data-agents dat @*NUMAGENTS*)
 	cluster-agents (init-cluster-agents dat k)
 	member-refs (init-member-refs k)]
     (loop [curiter 0]
-      (assignment stop data-agents cluster-agents member-refs)
+      (assignment stop data-agents cluster-agents member-refs snp)
 			;(println (map #(empty? @%) member-refs))
 			;(println (reduce #(or %1 %2) (map #(empty? @%) member-refs)))
 			; if empty clusters -> restart kmeans with new clusters
@@ -154,7 +162,7 @@
 
 	(do
 ;					(println "da")
-	  (update cluster-agents member-refs)
+	  (update cluster-agents member-refs snp)
 	  (if (check-stop stop curiter maxiter)
 	    (struct kmeansresult (read-assignments data-agents) (read-centers cluster-agents) curiter)
 	    (recur (inc curiter))))))))

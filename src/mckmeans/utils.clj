@@ -9,6 +9,10 @@
 	   (java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter))
   (:gen-class))
 
+;(import '(cern.jet.random.sampling RandomSamplingAssistant)
+;	'(java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter))
+;(use	'(clojure.contrib def))
+
 (defn split-string
   [#^String s #^String sc]
   (. s (split sc)))
@@ -17,13 +21,23 @@
   [#^String s]
   (. Double (parseDouble s)))
 
+(defn string-to-int
+  [#^String s]
+  (Integer/parseInt s))
+
 (defn parse-tab-line
   [#^String s]
   (double-array (map string-to-double (split-string s "\t"))))
 
+(defn parse-tab-line-snp
+  [#^String s]
+  (int-array (map string-to-int (split-string s "\t"))))
+
 (defn load-tab-file
-  [filename]
-  (vec (doall (pmap parse-tab-line (split-string (slurp filename) "\n")))))
+  [filename snp]
+  (if-not snp
+    (vec (doall (pmap parse-tab-line (split-string (slurp filename) "\n"))))
+    (vec (doall (pmap parse-tab-line-snp (split-string (slurp filename) "\n"))))))
 
 (defn save-result
   [#^String filename #^String res]
@@ -64,10 +78,33 @@
   (areduce as i ret (double 0)
 	   (+ ret (* (- (aget as i) (aget bs i)) (- (aget as i) (aget bs i))))))
 
+(defn distance-snp
+  [#^ints as #^ints bs]
+  (areduce as i ret (int 0)
+	   (+ ret (Math/abs (Integer/signum (unchecked-subtract (aget as i) (aget bs i)))))))
+
 (defn da+ 
   [#^doubles as #^doubles bs]
   (amap as i ret
 	(+ (aget as i) (aget bs i))))
+
+(defn da-snp-freq
+  [#^ints as #^ints bs]
+  (let [mod 3]
+    (areduce bs i ret (int 0)
+	     (* ret (int (aset-int as (+ (* i mod) (aget bs i)) (inc (aget as (+ (* i mod) (aget bs i)))))))))
+  as)
+
+(defn da-snp-mode
+  [#^ints as]
+  (let [bs (int-array (/ (alength as) 3))
+	mod (int 3)
+	pos1 (int 1)
+	pos2 (int 2)]
+    (areduce bs i ret (int 0)
+	     (* ret (int (aset-int bs i (whichmax (double-array 
+			(list (aget as (* i mod)) (aget as (+ (* i mod) pos1)) (aget as (+ (* i mod) pos2)))))))))
+    bs))
 
 (defn split-seq
   [len k]

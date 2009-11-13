@@ -587,14 +587,22 @@
 
 (defn runCMD [infile outfile k maxiter cne? cnemax cneruns cneoutfile]
   (dosync (ref-set *DATASET* (load-tab-file infile)))
-  (dosync (ref-set *K* k))
-  (dosync (ref-set *MAXITER* maxiter))
-  (dosync (ref-set *ERUNS* cneruns))
-  (dosync (ref-set *CNEMAX* cnemax))
+  (if (string? k)
+    (dosync (ref-set *K* (. Integer (parseInt k))))
+    (dosync (ref-set *K* k)))
+  (if (string? maxiter)
+    (dosync (ref-set *MAXITER* (. Integer (parseInt maxiter))))
+    (dosync (ref-set *MAXITER* maxiter)))
+  (if (string? cneruns)
+    (dosync (ref-set *ERUNS* (. Integer (parseInt cneruns))))
+    (dosync (ref-set *ERUNS* cneruns)))
+  (if (string? cnemax)
+    (dosync (ref-set *CNEMAX* (. Integer (parseInt cnemax))))
+    (dosync (ref-set *CNEMAX* cnemax)))
   (if cne?
-    (do (println "Starting McKmeans cluster number estimation. Find the output in " outfile " and " cneoutfile)
+    (do (println "Starting McKmeans cluster number estimation."); Find the output in " outfile " and " cneoutfile)
 	(runCNE outfile cneoutfile))
-    (do (println "Starting McKmeans analysis. Find the output in " outfile)
+    (do (println "Starting McKmeans cluster analysis."); Find the output in " outfile)
 	(runKmeans outfile)))
   (System/exit 0))
 
@@ -602,7 +610,7 @@
   (if (nil? args)
     (runGUI)
     (with-command-line args
-      "Command line demo"
+      "Command line usage"
       [[infile i "The name of the input file."]
        [outfile o "The name of the output file." "clustering.txt"]
        [k "The number of clusters" 2]

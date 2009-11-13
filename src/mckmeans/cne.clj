@@ -6,10 +6,11 @@
 (ns mckmeans.cne
   (:use (clojure.contrib seq-utils def)
 	(mckmeans utils kmeans))
-;  (:import (cern.jet.random.sampling RandomSamplingAssistant)
-;	   (java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter))
   (:import (assignment AssignmentProblem HungarianAlgorithm))
   (:gen-class))
+
+;(use '(clojure.contrib seq-utils def))
+;(import '(assignment AssignmentProblem HungarianAlgorithm))
 
 (def *SAVERES* (ref false))
 
@@ -18,31 +19,72 @@
   [dat centers]
   (doall (pmap (fn [x] (whichmin (double-array (map #(distance x %) centers)))) dat)))
 
-(defn jackknife-kmeans
-  "Do jackknife resampling nrun times. Each time calculate kmeans result for the whole dataset"
-  [dat nrun k maxiter]
+(defn jack [dat k maxiter]
   (let [size (int (count dat))
-	nrun (int nrun)]
-    (loop [run (int 0) res '()]
-      (println run)
-      (if (= run nrun)
-	(vec res)
-	(let [leaveout (. Math (ceil (. Math (sqrt size))))
-	      subsetidx (sample size (- size leaveout))
-	      subset (doall (map #(nth dat %1) subsetidx))
-	      kmeansres (kmeans subset k maxiter)]
-	  (if @*SAVERES*
-	    (save-append-result "clusterresults.txt" (.. (println-str (:cluster kmeansres)) (replace "(" "") (replace ")" ""))))
-	  (recur (inc run) (conj res (predict-assignment dat (:centers kmeansres)))))))))
+	leaveout (. Math (ceil (. Math (sqrt size))))
+	subsetidx (sample size (- size leaveout))
+	subset (doall (map #(nth dat %1) subsetidx))
+	kmeansres (kmeans subset k maxiter)]
+    (predict-assignment dat (:centers kmeansres))))
+
+(defn jackknife-kmeans
+  [dat nrun k maxiter]
+  (let [nrun (int nrun)]
+    (vec (doall (pmap (fn [_] (jack dat k maxiter)) (range nrun))))))
+
+;(defn jackknife-kmeans
+;  "Do jackknife resampling nrun times. Each time calculate kmeans result for the whole dataset"
+;  [dat nrun k maxiter]
+;  (let [size (int (count dat))
+;	nrun (int nrun)]
+;    (loop [run (int 0) res '()]
+;      (println run)
+;      (if (= run nrun)
+;	(vec res)
+;	(let [leaveout (. Math (ceil (. Math (sqrt size))))
+;	      subsetidx (sample size (- size leaveout))
+;	      subset (doall (map #(nth dat %1) subsetidx))
+;	      kmeansres (kmeans subset k maxiter)]
+;	  (if @*SAVERES*
+;	    (save-append-result "clusterresults.txt" (.. (println-str (:cluster kmeansres)) (replace "(" "") (replace ")" ""))))
+;	  (recur (inc run) (conj res (predict-assignment dat (:centers kmeansres)))))))))
 
 (defn kloop-jackknife-kmeans
   "Do jackknife resampling nrun times for all k in ks"
   [dat nrun ks maxiter]
-  (loop [klist ks res '()]
-    (println (first klist))
-    (if (empty? klist)
-      (vec (reverse res))
-      (recur (rest klist) (conj res (jackknife-kmeans dat nrun (first klist) maxiter))))))
+  (vec (reverse (doall (pmap #(jackknife-kmeans dat nrun % maxiter) ks)))))
+
+;(defn kloop-jackknife-kmeans
+;  "Do jackknife resampling nrun times for all k in ks"
+;  [dat nrun ks maxiter]
+;  (loop [klist ks res '()]
+;    (println (first klist))
+;    (if (empty? klist)
+;      (vec (reverse res))
+;      (recur (rest klist) (conj res (jackknife-kmeans dat nrun (first klist) maxiter))))))
+
+(defn calculate-baselines
+  ""
+  [dat nrun ks]
+  (let [size (count dat)]
+    (vec (reverse (doall (pmap (fn [x]
+			(vec (doall (pmap (fn [_] 
+					    (let [centers (map #(nth dat %) (sample size x))]
+					      (predict-assignment dat centers)))
+					    (range nrun))))) ks))))))
+
+;(defn calculate-baselines
+;  ""
+;  [dat nrun ks]
+;  (let [size (count dat)]
+;    (loop [klist ks kres '()]
+;      (if (empty? klist)
+;	(vec (reverse kres))
+;	(recur (rest klist) (conj kres (loop [run 0 res '()]
+;					 (if (= run nrun)
+;					   (vec res)
+;					   (let [centers (map #(nth dat %) (sample size (first klist)))]
+;					     (recur (inc run) (conj res (predict-assignment dat centers))))))))))))
 
 (defmacro init-array [type init-fn & dims]
   (let [idxs (map (fn [_] (gensym)) dims)
@@ -84,28 +126,37 @@
   "Using jackknife resampling and evaluation via MCA-index to estimate the 'right' number of clusters"
   [dat nrun ks maxiter]
   (let [jacks (kloop-jackknife-kmeans dat nrun ks maxiter)]
-    (for [jack jacks]
-      (flatten (for [comb (pairwise-comb nrun)] (mca-index (nth jack (first comb)) (nth jack (second comb))))))))
+    (doall (pmap (fn [x]
+		   (let [comb (pairwise-comb nrun)]
+		     (doall (pmap (fn [y]
+				    (mca-index (nth x (first y)) (nth x (second y))))
+				  comb))))
+		 jacks))))
 
-(defn calculate-baselines
-  ""
-  [dat nrun ks]
-  (let [size (count dat)]
-    (loop [klist ks kres '()]
-      (if (empty? klist)
-	(vec (reverse kres))
-	(recur (rest klist) (conj kres (loop [run 0 res '()]
-					 (if (= run nrun)
-					   (vec res)
-					   (let [centers (map #(nth dat %) (sample size (first klist)))]
-					     (recur (inc run) (conj res (predict-assignment dat centers))))))))))))
+;(defn calculate-mca-results
+;  "Using jackknife resampling and evaluation via MCA-index to estimate the 'right' number of clusters"
+;  [dat nrun ks maxiter]
+;  (let [jacks (kloop-jackknife-kmeans dat nrun ks maxiter)]
+;    (for [jack jacks]
+;      (flatten (for [comb (pairwise-comb nrun)] (mca-index (nth jack (first comb)) (nth jack (second comb))))))))
 
 (defn calculate-mca-baselines
   ""
   [dat nrun ks]
-  (let [bases (calculate-baselines dat nrun ks)]
-    (for [base bases]
-      (flatten (for [comb (pairwise-comb nrun)] (mca-index (nth base (first comb)) (nth base (second comb))))))))
+  (let [jacks (calculate-baselines dat nrun ks)]
+    (doall (pmap (fn [x]
+		   (let [comb (pairwise-comb nrun)]
+		     (doall (pmap (fn [y]
+				    (mca-index (nth x (first y)) (nth x (second y))))
+				  comb))))
+		 jacks))))
+
+;(defn calculate-mca-baselines
+;  ""
+;  [dat nrun ks]
+;  (let [bases (calculate-baselines dat nrun ks)]
+;    (for [base bases]
+;      (flatten (for [comb (pairwise-comb nrun)] (mca-index (nth base (first comb)) (nth base (second comb))))))))
 
 (defn get-best-k
   ""
