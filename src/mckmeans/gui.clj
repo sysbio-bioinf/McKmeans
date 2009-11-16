@@ -17,7 +17,7 @@
 	   (org.jfree.chart.axis CategoryAnchor AxisLocation)
 	   (org.jfree.data.statistics DefaultBoxAndWhiskerCategoryDataset)
 	   (org.jfree.chart ChartFactory JFreeChart ChartPanel)
-	   (org.jfree.chart.plot PlotOrientation)
+	   (org.jfree.chart.plot PlotOrientation CombinedDomainXYPlot)
 	   (org.apache.batik.dom GenericDOMImplementation)
 	   (org.apache.batik.svggen SVGGraphics2D)
 	   (org.w3c.dom DOMImplementation Document))
@@ -42,6 +42,19 @@
       (aset-double (aget data 0) idx (nth (nth @*DATASET* idx) dimx))
       (aset-double (aget data 1) idx (nth (nth @*DATASET* idx) dimy)))
     (list data)))
+
+(defn data2snpplotdata [snpnum]
+  (let [numrows (count @*DATASET*)
+	len (alength (nth @*DATASET* snpnum))
+	data (make-array (. Double TYPE) 2 len)]
+    (dotimes [idx len]
+      (aset-double (aget data 0) idx (inc idx))
+      (aset-double (aget data 1) idx (aget (nth @*DATASET* snpnum) idx)))
+    data))
+
+(defn make-snpplotdata
+  [snps]
+  (map #(data2snpplotdata %) snps))
 
 (defn assignments2plotdata [dimx dimy ass]
   (let [data (map (fn [x] (make-array (. Double TYPE) 2 (count (filter #(= x %) ass)))) (range @*K*))
@@ -339,7 +352,7 @@
 	plot-panel (new ChartPanel plot-area)
 
 	kmodes-data (new DefaultXYDataset)
-	kmodes-plot-chart (. ChartFactory (createXYLineChart "" "x-Axis" "y-Axis" plot-data (. PlotOrientation VERTICAL) true false false))
+	kmodes-plot-chart (. ChartFactory (createXYLineChart "" "x-Axis" "y-Axis" kmodes-data (. PlotOrientation VERTICAL) true false false))
 	kmodes-plot-panel (new ChartPanel kmodes-plot-chart)
 
 	boxplot-data (DefaultBoxAndWhiskerCategoryDataset.)
@@ -349,7 +362,7 @@
 
 	work-panel (new JPanel)
 	;plot-button (new JButton "Plot")
-	run-button (new JButton "Run clustering")
+	run-button (new JButton "Cluster!")
 	run-button-panel (JPanel.)
 	estimation-button-panel (JPanel.)
 
@@ -440,13 +453,20 @@
 				(. maxiter-text (setText (pr-str @*MAXITER*)))
 				(let [res (kmeans @*DATASET* @*K* @*MAXITER* @*SNPMODE*)
 				      old (. plot-data (getSeriesCount))]
-				  (dosync (ref-set *RESULT* res))	  
+				  (dosync (ref-set *RESULT* res))
+
+;				  (if @*SNPMODE*
+;				    (do ()
+;					(doall (map (fn [idx x] (doto kmodes-data (. addSeries (str "sample " idx) x))) (iterate inc 1) (make-snpplotdata (range (count @*DATASET*))))))
+;				    (do (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
+;					(doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (make-plotdata @*DIMX* @*DIMY* @*RESULT*)))))
 				  (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
-				  (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (make-plotdata @*DIMX* @*DIMY* @*RESULT*))))
+				  (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (make-plotdata @*DIMX* @*DIMY* @*RESULT*)))
+
 ;				(let [restext (.. (pr-str (:cluster @*RESULT*)) (replace "(" "") (replace ")" ""))]
 ;				  (. result-text
 ;				     (setText restext)))
-				(. statusbar (setText " finished clustering"))))))
+				  (. statusbar (setText " finished clustering")))))))
 
     (. estimate-button
        (addActionListener
@@ -467,6 +487,8 @@
 				 bestk (get-best-k clusterresults baselineresults)
 				 res (kmeans @*DATASET* bestk @*MAXITER* @*SNPMODE*)
 				 old (. plot-data (getSeriesCount))]
+
+			     (. boxplot-data (clear))
 
 			     (dorun (map #(.add boxplot-data %1 %2 %3) clusterresults (replicate len "McKmeans result") (iterate inc 2)))
 			     (dorun (map #(.add boxplot-data %1 %2 %3) baselineresults (replicate len "Random prototype baseline") (iterate inc 2)))
@@ -526,15 +548,14 @@
 					      dataset (load-tab-file filename snp)
 					      old (. plot-data (getSeriesCount))]
 					  (dosync (ref-set *SNPMODE* snp))
-					  
+					  (dosync (ref-set *DATASET* dataset))					  
 
-					  ;(if @*SNPMODE*
-					  ;  (doall (map (fn [idx x] (doto kmodes-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (data2plotdata @*DIMX* @*DIMY*))))
-
-
-					  (dosync (ref-set *DATASET* dataset))
-					  (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
-					  (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (data2plotdata @*DIMX* @*DIMY*)))
+					  (if @*SNPMODE*
+					    (do (. plot-panel (setChart kmodes-plot-chart))
+						(doall (map (fn [idx x] (doto kmodes-data (. addSeries (str "sample " idx) x))) (iterate inc 1) (make-snpplotdata (range (count @*DATASET*))))))
+					    (do (. plot-panel (setChart plot-area))
+						(doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
+						(doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (data2plotdata @*DIMX* @*DIMY*)))))
 
 					  (. boxplot-data (clear)) 
 
