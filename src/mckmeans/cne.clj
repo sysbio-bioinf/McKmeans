@@ -16,21 +16,23 @@
 
 (defn predict-assignment
   ""
-  [dat centers]
-  (doall (pmap (fn [x] (whichmin (double-array (map #(distance x %) centers)))) dat)))
+  [dat centers snpmode]
+  (if-not snpmode
+    (doall (pmap (fn [x] (whichmin (double-array (map #(distance x %) centers)))) dat))
+    (doall (pmap (fn [x] (whichmin (double-array (map #(distance-snp x %) centers)))) dat))))
 
-(defn jack [dat k maxiter]
+(defn jack [dat k maxiter snpmode]
   (let [size (int (count dat))
 	leaveout (. Math (ceil (. Math (sqrt size))))
 	subsetidx (sample size (- size leaveout))
 	subset (doall (map #(nth dat %1) subsetidx))
-	kmeansres (kmeans subset k maxiter)]
-    (predict-assignment dat (:centers kmeansres))))
+	kmeansres (kmeans subset k maxiter snpmode)]
+    (predict-assignment dat (:centers kmeansres) snpmode)))
 
 (defn jackknife-kmeans
-  [dat nrun k maxiter]
+  [dat nrun k maxiter snpmode]
   (let [nrun (int nrun)]
-    (vec (doall (pmap (fn [_] (jack dat k maxiter)) (range nrun))))))
+    (vec (doall (pmap (fn [_] (jack dat k maxiter snpmode)) (range nrun))))))
 
 ;(defn jackknife-kmeans
 ;  "Do jackknife resampling nrun times. Each time calculate kmeans result for the whole dataset"
@@ -51,8 +53,8 @@
 
 (defn kloop-jackknife-kmeans
   "Do jackknife resampling nrun times for all k in ks"
-  [dat nrun ks maxiter]
-  (vec (reverse (doall (pmap #(jackknife-kmeans dat nrun % maxiter) ks)))))
+  [dat nrun ks maxiter snpmode]
+  (vec (reverse (doall (pmap #(jackknife-kmeans dat nrun % maxiter snpmode) ks)))))
 
 ;(defn kloop-jackknife-kmeans
 ;  "Do jackknife resampling nrun times for all k in ks"
@@ -65,12 +67,12 @@
 
 (defn calculate-baselines
   ""
-  [dat nrun ks]
+  [dat nrun ks snpmode]
   (let [size (count dat)]
     (vec (reverse (doall (pmap (fn [x]
 			(vec (doall (pmap (fn [_] 
 					    (let [centers (map #(nth dat %) (sample size x))]
-					      (predict-assignment dat centers)))
+					      (predict-assignment dat centers snpmode)))
 					    (range nrun))))) ks))))))
 
 ;(defn calculate-baselines
@@ -124,8 +126,8 @@
 
 (defn calculate-mca-results
   "Using jackknife resampling and evaluation via MCA-index to estimate the 'right' number of clusters"
-  [dat nrun ks maxiter]
-  (let [jacks (kloop-jackknife-kmeans dat nrun ks maxiter)]
+  [dat nrun ks maxiter snpmode]
+  (let [jacks (kloop-jackknife-kmeans dat nrun ks maxiter snpmode)]
     (doall (pmap (fn [x]
 		   (let [comb (pairwise-comb nrun)]
 		     (doall (pmap (fn [y]
@@ -142,8 +144,8 @@
 
 (defn calculate-mca-baselines
   ""
-  [dat nrun ks]
-  (let [jacks (calculate-baselines dat nrun ks)]
+  [dat nrun ks snpmode]
+  (let [jacks (calculate-baselines dat nrun ks snpmode)]
     (doall (pmap (fn [x]
 		   (let [comb (pairwise-comb nrun)]
 		     (doall (pmap (fn [y]
