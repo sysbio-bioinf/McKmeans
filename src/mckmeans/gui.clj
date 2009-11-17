@@ -8,7 +8,7 @@
      :doc "Multi-core kmeans cluster application"}
   (:use (mckmeans kmeans utils cne)
 	clojure.contrib.command-line)
-  (:import (javax.swing JFrame JLabel JButton JPanel JMenuBar JMenu JMenuItem JFileChooser JTextField JCheckBox JTextArea JScrollPane JTabbedPane)
+  (:import (javax.swing JFrame JLabel JButton JPanel JMenuBar JMenu JMenuItem JFileChooser JTextField JCheckBox JTextArea JScrollPane JTabbedPane JOptionPane)
 	   (javax.swing.filechooser FileFilter)
 	   (java.awt.event ActionListener KeyListener)
 	   (java.awt FlowLayout GridLayout BorderLayout Color)
@@ -82,7 +82,7 @@
 	about-text (JTextArea. 5 1)
 	close-button (JButton. "Close")]
     (. about-text (setEditable false))
-    (. about-text (setText "\tMcKmeans\n\nVersion:\t0.42\nAuthors:\tJohann M. Kraus\n\tHans A. Kestler\nCopyright:\tArtistic Licence 2.0"))
+    (. about-text (setText "\tMcKmeans\n\nThis is the mulit-core K-means cluster\napplication. Perform K-means cluster\nanalysis and cluster number\nestimation while using all\nyour hardware.\n\nVersion:\t0.42\nAuthors:\tJohann M. Kraus\n\tHans A. Kestler\nCopyright:\tArtistic Licence 2.0"))
     (. close-button
       (addActionListener
        (proxy [ActionListener] []
@@ -545,7 +545,8 @@
 					(let [ret (. file-chooser (showOpenDialog frame))
 					      filename (. (. file-chooser (getSelectedFile)) (getPath))
 					      snp (. (. filename (substring (inc (. filename (lastIndexOf "."))))) (equalsIgnoreCase "snp"))
-					      dataset (load-tab-file filename snp)
+					      ;dataset (load-tab-file filename snp)
+					      dataset (if-not snp (read-csv filename "\t" false csv-parse-double) (read-csv filename "\t" false csv-parse-int))
 					      old (. plot-data (getSeriesCount))]
 					  (dosync (ref-set *SNPMODE* snp))
 					  (dosync (ref-set *DATASET* dataset))					  
@@ -562,7 +563,8 @@
 					  (. result-text (setText ""))
 					  (. statusbar
 					     (setText " file loaded")))
-					(catch Exception e (. statusbar (setText " error while loading file"))))
+;					(catch Exception e (. statusbar (setText " error while loading file"))))
+					(catch Exception e (JOptionPane/showMessageDialog nil "Error while loading file. See 'Help - File format'\nfor information about supported formats." "Error" JOptionPane/ERROR_MESSAGE)))
 				       ))))
 
 		(. menu-file-save
@@ -710,7 +712,8 @@
 
 (defn runCMD [infile outfile k maxiter cne? cnemax cneruns cneoutfile]
   (dosync (ref-set *SNPMODE* (. (. infile (substring (inc (. infile (lastIndexOf "."))))) (equalsIgnoreCase "snp"))))
-  (dosync (ref-set *DATASET* (load-tab-file infile @*SNPMODE*)))
+; (dosync (ref-set *DATASET* (load-tab-file infile @*SNPMODE*)))
+  (dosync (ref-set *DATASET* (if-not @*SNPMODE* (read-csv infile "\t" false csv-parse-double) (read-csv infile "\t" false csv-parse-int))))
   (if (string? k)
     (dosync (ref-set *K* (. Integer (parseInt k))))
     (dosync (ref-set *K* k)))

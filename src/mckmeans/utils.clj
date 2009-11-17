@@ -4,14 +4,14 @@
 ;;;;
 
 (ns mckmeans.utils
-  (:use clojure.contrib.def)
+  (:use clojure.contrib.def clojure.contrib.duck-streams)
   (:import (cern.jet.random.sampling RandomSamplingAssistant)
 	   (java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter))
   (:gen-class))
 
 ;(import '(cern.jet.random.sampling RandomSamplingAssistant)
 ;	'(java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter))
-;(use	'(clojure.contrib def))
+;(use	'(clojure.contrib def duck-streams))
 
 (defn split-string
   [#^String s #^String sc]
@@ -38,6 +38,28 @@
   (if-not snp
     (vec (doall (pmap parse-tab-line (split-string (slurp filename) "\n"))))
     (vec (doall (pmap parse-tab-line-snp (split-string (slurp filename) "\n"))))))
+
+(defn csv-parse-string
+  "Get string-arry from csv-like string using separator sc, e.g. 'a,b,3,c.d'."
+  [#^String s #^String sc]
+  (.split s sc))
+
+(defn csv-parse-int
+  "Get int-arry from csv-like string using separator sc, e.g. 'a,b,3,c.d'."
+  [#^String s #^String sc]
+  (let [string-array (.split s sc)]
+    (int-array (map #(Integer/parseInt %) string-array))))
+
+(defn csv-parse-double
+  "Get double-arry from csv-like string using separator sc, e.g. '1,2,3,4.5'."
+  [#^String s #^String sc]
+  (let [string-array (.split s sc)]
+    (double-array (map #(Double/parseDouble %) string-array))))
+
+(defn read-csv
+  [filename sc header csvparser]
+  (let [lines (read-lines filename)]
+    (vec (doall (map #(apply csvparser % (list sc)) (drop (if header 1 0) lines))))))
 
 (defn save-result
   [#^String filename #^String res]
