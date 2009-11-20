@@ -144,3 +144,17 @@
 	(if (= counter n)
 	  (recur (inc start) (inc (inc start)) (conj res (list start counter)))
 	  (recur start (inc counter) (conj res (list start counter))))))))
+
+(defn transpose [dat snpmode]
+  (let [nrow (int (count dat))
+	ncol (int (alength (first dat)))
+	ilist (range ncol)]
+    (loop [idx (dec nrow)
+	   tran (vec (replicate ncol '()))]
+      (if (>= idx 0)
+	(let [curdat (dat idx)]
+	  (recur (dec idx) (vec (doall (map #(cons (aget curdat %) (tran %)) ilist)))))
+	(if-not snpmode
+	  (vec (doall (map #(double-array %) tran)))
+	  (vec (doall (map #(int-array %) tran))))))))
+

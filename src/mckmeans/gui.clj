@@ -8,14 +8,15 @@
      :doc "Multi-core kmeans cluster application"}
   (:use (mckmeans kmeans utils cne)
 	clojure.contrib.command-line)
-  (:import (javax.swing JFrame JLabel JButton JPanel JMenuBar JMenu JMenuItem JFileChooser JTextField JCheckBox JTextArea JScrollPane JTabbedPane JOptionPane)
+  (:import (javax.swing JFrame JLabel JButton JPanel JMenuBar JMenu JMenuItem JFileChooser JTextField JCheckBox JTextArea JScrollPane JTabbedPane JOptionPane SwingUtilities)
 	   (javax.swing.filechooser FileFilter)
 	   (java.awt.event ActionListener KeyListener)
 	   (java.awt FlowLayout GridLayout BorderLayout Color)
 	   (java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter)
 	   (org.jfree.data.xy DefaultXYDataset)
-	   (org.jfree.chart.axis CategoryAnchor AxisLocation)
+	   (org.jfree.chart.axis CategoryAnchor AxisLocation NumberAxis)
 	   (org.jfree.data.statistics DefaultBoxAndWhiskerCategoryDataset)
+	   (org.jfree.data.category DefaultCategoryDataset)
 	   (org.jfree.chart ChartFactory JFreeChart ChartPanel)
 	   (org.jfree.chart.plot PlotOrientation CombinedDomainXYPlot)
 	   (org.apache.batik.dom GenericDOMImplementation)
@@ -24,6 +25,8 @@
   (:gen-class))
 
 ;;;; GLOBALS ;;;;
+(def *TRANSPOSED* (ref false))
+(def *TDATASET* (ref nil))
 (def *DATASET* (ref nil))
 (def *RESULT* (ref nil))
 (def *K* (ref 2))
@@ -35,12 +38,12 @@
 (def *SNPMODE* (ref false))
 
 ;### only 2 dim plots; TODO improve via PCA
-(defn data2plotdata [dimx dimy]
-  (let [numrows (count @*DATASET*)
+(defn data2plotdata [dataset dimx dimy]
+  (let [numrows (count dataset)
 	data (make-array (. Double TYPE) 2 numrows)]
     (dotimes [idx numrows]
-      (aset-double (aget data 0) idx (nth (nth @*DATASET* idx) dimx))
-      (aset-double (aget data 1) idx (nth (nth @*DATASET* idx) dimy)))
+      (aset-double (aget data 0) idx (nth (nth dataset idx) dimx))
+      (aset-double (aget data 1) idx (nth (nth dataset idx) dimy)))
     (list data)))
 
 (defn data2snpplotdata [snpnum]
@@ -56,7 +59,7 @@
   [snps]
   (map #(data2snpplotdata %) snps))
 
-(defn assignments2plotdata [dimx dimy ass]
+(defn assignments2plotdata [dataset dimx dimy ass]
   (let [data (map (fn [x] (make-array (. Double TYPE) 2 (count (filter #(= x %) ass)))) (range @*K*))
 	ass (vec ass)
 	maxidx (count ass)]
@@ -65,15 +68,25 @@
 	(let [curidx (nth ass idx)
 	      curdata (nth data curidx)
 	      curdataidx (nth idxs curidx)]
-	  (aset-double (aget curdata 0) curdataidx (nth (nth @*DATASET* idx) dimx))
-	  (aset-double (aget curdata 1) curdataidx (nth (nth @*DATASET* idx) dimy))
+	  (aset-double (aget curdata 0) curdataidx (nth (nth dataset idx) dimx))
+	  (aset-double (aget curdata 1) curdataidx (nth (nth dataset idx) dimy))
 	  (recur (inc idx) (map (fn [x y] (if (= curidx y) (inc x) x)) idxs (iterate inc 0))))
 	data))))
 
-(defn make-plotdata [dimx dimy result]
+(defn make-plotdata [dataset dimx dimy result]
   (if (= result nil)
-    (data2plotdata dimx dimy)
-    (assignments2plotdata dimx dimy (:cluster result))))
+    (data2plotdata dataset dimx dimy)
+    (assignments2plotdata dataset dimx dimy (:cluster result))))
+
+(defn create-kmodes-cluster-plot [clusterdata]
+  (let [tmp-data (DefaultXYDataset.)
+	cluster-plot (. (. ChartFactory (createXYLineChart "" "" "SNP code" tmp-data (. PlotOrientation VERTICAL) false false false)) (getXYPlot))] ; refactor this line !!!
+    (doall (map (fn [idx x] (doto tmp-data (. addSeries idx x))) (iterate inc 0) (make-snpplotdata (range (count clusterdata)))))
+    (.. cluster-plot getRangeAxis (setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
+    (.. cluster-plot getDomainAxis (setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
+    (.. cluster-plot getRangeAxis (setRange -0.5 2.5))
+   
+    cluster-plot))
 
 (defn show-about-panel
   []
@@ -111,7 +124,7 @@
 	dimy-label (new JLabel " dim y:")
 	dimx-text (new JTextField)
 	dimy-text (new JTextField)
-	save-estimation (new JCheckBox "Save cluster results" false)
+	save-estimation (new JCheckBox "" false)
 	update-button (new JButton "Update")]
 
     (. update-button
@@ -131,7 +144,7 @@
     (. save-estimation (setSelected @*SAVERES*))
     
     (doto options-panel
-      (. setLayout (new GridLayout 3 3 5 5))
+      (. setLayout (new GridLayout 4 3 5 5))
       
       (. add dim-label)
       (. add dimx-label)
@@ -141,7 +154,11 @@
       (. add dimx-text)
       (. add dimy-text)
 
+      (. add (new JLabel "Save all results from cluster number estimation?"))
       (. add save-estimation)
+      (. add (new JLabel ""))
+
+      (. add (new JLabel ""))
       (. add (new JLabel ""))
       (. add update-button))
 
@@ -332,7 +349,8 @@
 	menu-options (new JMenu "Options")
 	menu-options-clusters (new JMenuItem "Cluster options")
 
-	menu-preferences (JMenuItem. "Preferences")
+	menu-preferences (JMenuItem. "Preferences...")
+	menu-exit (JMenuItem. "Exit")
 
 	menu-help (new JMenu "Help")
 	menu-help-about (new JMenuItem "About")
@@ -348,16 +366,20 @@
 	cne-options-panel (JPanel.)
 
 	plot-data (new DefaultXYDataset)
-	plot-area (. ChartFactory (createScatterPlot "" "x-Axis" "y-Axis" plot-data (. PlotOrientation VERTICAL) true false false))
+	plot-area (. ChartFactory (createScatterPlot "" "dim x" "dim y" plot-data (. PlotOrientation VERTICAL) true false false))
 	plot-panel (new ChartPanel plot-area)
 
-	kmodes-data (new DefaultXYDataset)
-	kmodes-plot-chart (. ChartFactory (createXYLineChart "" "x-Axis" "y-Axis" kmodes-data (. PlotOrientation VERTICAL) true false false))
-	kmodes-plot-panel (new ChartPanel kmodes-plot-chart)
+	kmodes-data (DefaultXYDataset.)
+	kmodes-chart (. ChartFactory (createXYLineChart "" "" "SNP code" kmodes-data (. PlotOrientation VERTICAL) true false false))
+	kmodes-combined-plot (CombinedDomainXYPlot.)
+	kmodes-combined-chart (JFreeChart. kmodes-combined-plot)
+;	kmodes-data (DefaultCategoryDataset.)
+;	kmodes-chart (ChartFactory/createLineChart "" "feature" "sample" kmodes-data (. PlotOrientation VERTICAL) true false false)
+;	kmodes-plot-panel (ChartPanel. kmodes-chart)
 
 	boxplot-data (DefaultBoxAndWhiskerCategoryDataset.)
-	boxplot-chart (org.jfree.chart.ChartFactory/createBoxAndWhiskerChart "" "Cluster number" "MCA-index" boxplot-data true)
-	boxplot-panel (new ChartPanel boxplot-chart)
+	boxplot-chart (org.jfree.chart.ChartFactory/createBoxAndWhiskerChart "" "Cluster number k" "MCA-index" boxplot-data true)
+	boxplot-panel (ChartPanel. boxplot-chart)
 
 
 	work-panel (new JPanel)
@@ -367,10 +389,10 @@
 	estimation-button-panel (JPanel.)
 
 	numcluster-kmodes-text (new JTextField)
-	numcluster-kmodes-label (new JLabel "Number of clusters k:")
+	numcluster-kmodes-label (new JLabel " Number of clusters k:")
 	maxiter-kmodes-text (new JTextField)
-	maxiter-kmodes-label (new JLabel "Maximal number of iterations:")	
-	run-kmodes-button (new JButton "Run Clustering")
+	maxiter-kmodes-label (new JLabel " Maximal number of iterations:")	
+	run-kmodes-button (new JButton " Run Clustering")
 
 	cluster-panel (new JPanel)
 	estimation-panel (new JPanel)
@@ -401,23 +423,73 @@
 	result-panel (new JPanel)
 
 	statusbar (new JLabel " Welcome to the McKmeans cluster application ...")
-	file-chooser (new JFileChooser)]
+	file-chooser (new JFileChooser)
+	
+	info-panel (JPanel.)
+	info-sample-text (JTextField. 7)
+	info-feature-text (JTextField. 7)
+	info-sample-label (JLabel. "Number of samples:")
+	info-feature-label (JLabel. "Number of features:")
+	info-swap-button (JButton. "Transpose data!")]
+
+    (. info-sample-text (setBackground Color/lightGray))
+    (. info-feature-text (setBackground Color/lightGray))
+
+    (. info-swap-button
+      (addActionListener
+	(proxy [ActionListener] []
+	  (actionPerformed 
+	   [evt]
+	   (dosync (ref-set *TRANSPOSED* (not @*TRANSPOSED*)))
+
+	   (. info-sample-text (setText (str (count (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*)))))
+	   (. info-feature-text (setText (str (try (alength (first (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*))) (catch Exception e 0)))))
+
+	   (if @*SNPMODE*
+	     (do
+	       (. plot-panel (setChart kmodes-combined-chart))
+	       (. plot-panel (setRangeZoomable false))
+	       ; remove old plots
+	       (let [tmp (. kmodes-combined-plot (getSubplots))]
+		 (dotimes [i (. tmp (size))]
+		   (. kmodes-combined-plot (remove (. tmp (get 0))))))
+	       ; add new plot
+	       (. kmodes-combined-plot (add (create-kmodes-cluster-plot (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*)))))
+
+	     (do (. plot-panel (setChart plot-area))
+		 (. plot-panel (setRangeZoomable true))
+		 ; remove old plots
+		 (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc (. plot-data (getSeriesCount)))))))
+		 ; add new plots
+		 (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (data2plotdata (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*DIMX* @*DIMY*)))))
+
+	   ; remove boxplots
+	   (. boxplot-data (clear))))))
+
+    (doto info-panel
+      (. setLayout (FlowLayout. FlowLayout/LEFT))
+      (. add info-swap-button)
+      (. add info-sample-label)
+      (. add info-sample-text)
+      (. add info-feature-label)
+      (. add info-feature-text))
 
     (. file-chooser (setAcceptAllFileFilterUsed false))
     (. file-chooser
        (addChoosableFileFilter
 	(proxy [FileFilter] []
 	  (getDescription [] "TAB and SNP files")
-	  (accept [f]
-		  (if (. f (isDirectory))
-		    true
-		    (let [fname (. f getName)
-			  idx (inc (. fname (lastIndexOf ".")))
-			  extension (. fname (substring idx))]
-		      (if (or (. extension equalsIgnoreCase "tab")
-			      (. extension equalsIgnoreCase "snp"))
-			true
-			false)))))))
+	  (accept
+	   [f]
+	   (if (. f (isDirectory))
+	     true
+	     (let [fname (. f getName)
+		   idx (inc (. fname (lastIndexOf ".")))
+		   extension (. fname (substring idx))]
+	       (if (or (. extension equalsIgnoreCase "tab")
+		       (. extension equalsIgnoreCase "snp"))
+		 true
+		 false)))))))
     
     (.. boxplot-chart getCategoryPlot getRenderer (setMaximumBarWidth 0.25))
     (.. boxplot-chart getCategoryPlot getRenderer (setFillBox true))
@@ -427,10 +499,24 @@
     (.. boxplot-chart getCategoryPlot (setDomainGridlinePosition CategoryAnchor/MIDDLE))
     (.. boxplot-chart getCategoryPlot (setDomainGridlinesVisible true))
 
+;    (.. kmodes-chart getCategoryPlot getRangeAxis (setRange -0.5 2.5))
+;    (.. kmodes-chart getCategoryPlot getRangeAxis (setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
+;    (.. kmodes-chart getCategoryPlot (setDomainGridlinesVisible true))
+
+;    (.. kmodes-chart getPlot getRangeAxis (setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
+;    (.. kmodes-chart getPlot getDomainAxis (setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
+;    (.. kmodes-chart getPlot getRangeAxis (setRange -0.5 2.5))
+    (.. kmodes-combined-plot getDomainAxis (setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
+;    (.. kmodes-combined-plot getRangeAxis (setRange -0.5 2.5))
+    (. kmodes-combined-chart (removeLegend))
+
+    (. plot-panel (setPopupMenu nil))
+
     (. result-text (setLineWrap true))
     
     (. statusbar (setForeground (. Color red)))
-    ;(. statusbar (setBackground (. Color blue)))
+;    (. run-button (setBackground (. Color red)))
+
     (. numcluster-text (setText (pr-str @*K*)))
     (. maxiter-text (setText (pr-str @*MAXITER*)))
     (. numcluster-kmodes-text (setText (pr-str @*K*)))
@@ -445,127 +531,166 @@
     (. run-button
        (addActionListener
 	(proxy [ActionListener] []
-	       (actionPerformed [evt]
-				(. statusbar (setText " running cluster analysis ... this may take some time ..."))
-				(dosync (ref-set *K* (try (. Integer (parseInt (. numcluster-text (getText)))) (catch Exception e @*K*))))
-				(. numcluster-text (setText (pr-str @*K*)))
-				(dosync (ref-set *MAXITER* (try (. Integer (parseInt (. maxiter-text (getText)))) (catch Exception e @*MAXITER*))))
-				(. maxiter-text (setText (pr-str @*MAXITER*)))
-				(let [res (kmeans @*DATASET* @*K* @*MAXITER* @*SNPMODE*)
-				      old (. plot-data (getSeriesCount))]
-				  (dosync (ref-set *RESULT* res))
+	  (actionPerformed 
+	   [evt]
+	   (. statusbar (setText " running cluster analysis ... this may take some time ..."))
+	   (dosync (ref-set *K* (try (. Integer (parseInt (. numcluster-text (getText)))) (catch Exception e @*K*))))
+	   (. numcluster-text (setText (pr-str @*K*)))
+	   (dosync (ref-set *MAXITER* (try (. Integer (parseInt (. maxiter-text (getText)))) (catch Exception e @*MAXITER*))))
+	   (. maxiter-text (setText (pr-str @*MAXITER*)))
+	   (let [res (kmeans (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*K* @*MAXITER* @*SNPMODE*)
+		 old (. plot-data (getSeriesCount))]
+	     (dosync (ref-set *RESULT* res))
+	     (if @*SNPMODE*
+	       (do
+		 ; remove old plots
+		 (let [tmp (. kmodes-combined-plot (getSubplots))]
+		   (dotimes [i (. tmp (size))]
+		     (. kmodes-combined-plot (remove (. tmp (get 0))))))
 
-;				  (if @*SNPMODE*
-;				    (do ()
-;					(doall (map (fn [idx x] (doto kmodes-data (. addSeries (str "sample " idx) x))) (iterate inc 1) (make-snpplotdata (range (count @*DATASET*))))))
-;				    (do (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
-;					(doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (make-plotdata @*DIMX* @*DIMY* @*RESULT*)))))
-				  (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
-				  (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (make-plotdata @*DIMX* @*DIMY* @*RESULT*)))
+		 ; add new plots
+		 (let [clusterres (vec (:cluster res))
+		       data (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*)
+		       len (count data)
+		       datlist (loop [idx (int 0)
+				      ret (vec (replicate @*K* '()))]
+				 (if (< idx len)
+				   (recur (inc idx) (assoc ret (clusterres idx) (cons (data idx) (ret (clusterres idx)))))
+				   ret))]
+		   (doall (map #(. kmodes-combined-plot (add (create-kmodes-cluster-plot %))) datlist))))
+			       
 
-;				(let [restext (.. (pr-str (:cluster @*RESULT*)) (replace "(" "") (replace ")" ""))]
-;				  (. result-text
-;				     (setText restext)))
-				  (. statusbar (setText " finished clustering")))))))
+
+
+	       (do (doall (map (fn [idx]
+				 (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
+		   (doall (map (fn [idx x]
+				 (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (make-plotdata (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*DIMX* @*DIMY* @*RESULT*)))))
+
+	     (. statusbar (setText " finished clustering")))))))
 
     (. estimate-button
        (addActionListener
 	(proxy [ActionListener] []
-	  (actionPerformed [evt]
-			   (. statusbar (setText " running cluster number estimation ... this will take some time ..."))
-			   (dosync (ref-set *CNEMAX* (try (. Integer (parseInt (. estimate-k-text (getText)))) (catch Exception e 10))))
-			   (. estimate-k-text (setText (pr-str @*CNEMAX*)))
-			   (dosync (ref-set *ERUNS* (try (. Integer (parseInt (. estimate-run-text (getText)))) (catch Exception e 10))))
-			   (. estimate-run-text (setText (pr-str @*ERUNS*)))
-			   (dosync (ref-set *MAXITER* (try (. Integer (parseInt (. estimate-maxiter-text (getText)))) (catch Exception e @*MAXITER*))))
-			   (. estimate-maxiter-text (setText (pr-str @*MAXITER*)))
+	  (actionPerformed
+	   [evt]
+	   (. statusbar (setText " running cluster number estimation ... this will take some time ..."))
+	   (dosync (ref-set *CNEMAX* (try (. Integer (parseInt (. estimate-k-text (getText)))) (catch Exception e 10))))
+	   (. estimate-k-text (setText (pr-str @*CNEMAX*)))
+	   (dosync (ref-set *ERUNS* (try (. Integer (parseInt (. estimate-run-text (getText)))) (catch Exception e 10))))
+	   (. estimate-run-text (setText (pr-str @*ERUNS*)))
+	   (dosync (ref-set *MAXITER* (try (. Integer (parseInt (. estimate-maxiter-text (getText)))) (catch Exception e @*MAXITER*))))
+	   (. estimate-maxiter-text (setText (pr-str @*MAXITER*)))
+	   
+	   (let [ks (drop 2 (range (inc @*CNEMAX*)))
+		 clusterresults (calculate-mca-results (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*ERUNS* ks @*MAXITER* @*SNPMODE*)
+		 baselineresults (calculate-mca-baselines (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*ERUNS* ks @*SNPMODE*)
+		 len (count clusterresults)
+		 bestk (get-best-k clusterresults baselineresults)
+		 res (kmeans (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) bestk @*MAXITER* @*SNPMODE*)
+		 old (. plot-data (getSeriesCount))]
+	     (. boxplot-data (clear))
+	     (dorun (map #(.add boxplot-data %1 %2 %3) clusterresults (replicate len "McKmeans result") (iterate inc 2)))
+	     (dorun (map #(.add boxplot-data %1 %2 %3) baselineresults (replicate len "Random prototype baseline") (iterate inc 2)))
+	     (dosync (ref-set *K* bestk))
+	     (dosync (ref-set *RESULT* res))
+	     (. numcluster-text (setText (pr-str @*K*)))
+	     (. statusbar (setText " finished cluster number estimation"))
+	     
+	     (if @*SNPMODE*
+	       (do
+		 ; remove old plots
+		 (let [tmp (. kmodes-combined-plot (getSubplots))]
+		   (dotimes [i (. tmp (size))]
+		     (. kmodes-combined-plot (remove (. tmp (get 0))))))
+		 ; add new plots
+		 (let [clusterres (vec (:cluster res))
+		       data (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*)
+		       len (count data)
+		       datlist (loop [idx (int 0)
+				      ret (vec (replicate @*K* '()))]
+				 (if (< idx len)
+				   (recur (inc idx) (assoc ret (clusterres idx) (cons (data idx) (ret (clusterres idx)))))
+				   ret))]
+		   (doall (map #(. kmodes-combined-plot (add (create-kmodes-cluster-plot %))) datlist))))
 
-			   (let [ks (drop 2 (range (inc @*CNEMAX*)))
-				 clusterresults (calculate-mca-results @*DATASET* @*ERUNS* ks @*MAXITER* @*SNPMODE*)
-				 baselineresults (calculate-mca-baselines @*DATASET* @*ERUNS* ks @*SNPMODE*)
-				 len (count clusterresults)
-				 bestk (get-best-k clusterresults baselineresults)
-				 res (kmeans @*DATASET* bestk @*MAXITER* @*SNPMODE*)
-				 old (. plot-data (getSeriesCount))]
+	       (do
+		 (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
+		 (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (make-plotdata (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*DIMX* @*DIMY* @*RESULT*))))))))))
 
-			     (. boxplot-data (clear))
-
-			     (dorun (map #(.add boxplot-data %1 %2 %3) clusterresults (replicate len "McKmeans result") (iterate inc 2)))
-			     (dorun (map #(.add boxplot-data %1 %2 %3) baselineresults (replicate len "Random prototype baseline") (iterate inc 2)))
-
-;			     (boxplot-clusternumber clusterresults baselineresults)
-			     (dosync (ref-set *K* bestk))
-			     (dosync (ref-set *RESULT* res))
-			     (. numcluster-text (setText (pr-str @*K*)))
-;			     (let [restext (.. (pr-str (:cluster @*RESULT*)) (replace "(" "") (replace ")" ""))]
-;			       (. result-text
-;				  (setText restext)))
-			     (. statusbar (setText " finished cluster number estimation"))		     
-			     (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))				 
-			     (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (make-plotdata @*DIMX* @*DIMY* @*RESULT*))))))))
-
-		(doto cluster-panel
-		  (. setLayout (new FlowLayout FlowLayout/LEFT 35 5))
-		  (. add numcluster-label)
-		  (. add numcluster-text))
-		  ;(. add run-button))
+    (doto cluster-panel
+      (. setLayout (new FlowLayout FlowLayout/LEFT 35 5))
+      (. add numcluster-label)
+      (. add numcluster-text))
 			
-		(doto estimation-panel
-		  (. setLayout (new FlowLayout FlowLayout/LEFT))
-		  (. add estimate-k-label)
-		  (. add estimate-k-text))
-		  ;(. add estimate-button))
+    (doto estimation-panel
+      (. setLayout (new FlowLayout FlowLayout/LEFT))
+      (. add estimate-k-label)
+      (. add estimate-k-text))
 
-		(doto run-button-panel
-			(. setLayout (new FlowLayout FlowLayout/LEFT))
-			(. add run-button))
+    (doto run-button-panel
+      (. setLayout (new FlowLayout FlowLayout/LEFT))
+      (. add run-button))
 
-		(doto estimation-button-panel
-			(. setLayout (new FlowLayout FlowLayout/LEFT))
-			(. add estimate-button))
+    (doto estimation-button-panel
+      (. setLayout (new FlowLayout FlowLayout/LEFT))
+      (. add estimate-button))
 
-		(doto work-panel
-		  (. setLayout (new GridLayout 2 2 5 5))
-		  (. add cluster-panel)
-		  (. add run-button-panel)
-		  (. add estimation-panel)
-		  (. add estimation-button-panel))
+    (doto work-panel
+      (. setLayout (new GridLayout 2 2 5 5))
+      (. add cluster-panel)
+      (. add run-button-panel)
+      (. add estimation-panel)
+      (. add estimation-button-panel))
 
-		(doto result-panel
-		  (. setLayout (new BorderLayout))
-		  ;(. add result-label (. BorderLayout NORTH))
-		  ;(. add result-scrollpane (. BorderLayout CENTER))
-		  (. add statusbar (. BorderLayout SOUTH)))
+    (doto result-panel
+      (. setLayout (new BorderLayout))
+      ;(. add result-label (. BorderLayout NORTH))
+      ;(. add result-scrollpane (. BorderLayout CENTER))
+      (. add statusbar (. BorderLayout SOUTH)))
 
-		(. menu-file-load
-		   (addActionListener
-		    (proxy [ActionListener] []
-		      (actionPerformed [evt]
-				       (try
-					(let [ret (. file-chooser (showOpenDialog frame))
-					      filename (. (. file-chooser (getSelectedFile)) (getPath))
-					      snp (. (. filename (substring (inc (. filename (lastIndexOf "."))))) (equalsIgnoreCase "snp"))
-					      ;dataset (load-tab-file filename snp)
-					      dataset (if-not snp (read-csv filename "\t" false csv-parse-double) (read-csv filename "\t" false csv-parse-int))
-					      old (. plot-data (getSeriesCount))]
-					  (dosync (ref-set *SNPMODE* snp))
-					  (dosync (ref-set *DATASET* dataset))					  
+    (. menu-file-load
+       (addActionListener
+	(proxy [ActionListener] []
+	  (actionPerformed
+	   [evt]
+	   (try
+	    (let [ret (. file-chooser (showOpenDialog frame))
+		  filename (. (. file-chooser (getSelectedFile)) (getPath))
+		  snp (. (. filename (substring (inc (. filename (lastIndexOf "."))))) (equalsIgnoreCase "snp"))
+		  ;dataset (load-tab-file filename snp)
+		  dataset (if-not snp (read-csv filename "\t" false csv-parse-double) (read-csv filename "\t" false csv-parse-int))
+		  old (. plot-data (getSeriesCount))]
+	      (dosync (ref-set *SNPMODE* snp))
+	      (dosync (ref-set *DATASET* dataset))
+	      (dosync (ref-set *TDATASET* (transpose dataset snp)))
+	      (dosync (ref-set *TRANSPOSED* false))
 
-					  (if @*SNPMODE*
-					    (do (. plot-panel (setChart kmodes-plot-chart))
-						(doall (map (fn [idx x] (doto kmodes-data (. addSeries (str "sample " idx) x))) (iterate inc 1) (make-snpplotdata (range (count @*DATASET*))))))
-					    (do (. plot-panel (setChart plot-area))
-						(doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
-						(doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (data2plotdata @*DIMX* @*DIMY*)))))
+	      (. info-sample-text (setText (str (count dataset))))
+	      (. info-feature-text (setText (str (alength (first dataset)))))
 
-					  (. boxplot-data (clear)) 
+	      (if @*SNPMODE*
+		(do
+		  ; remove old plots
+		  (let [tmp (. kmodes-combined-plot (getSubplots))]
+		    (dotimes [i (. tmp (size))]
+		      (. kmodes-combined-plot (remove (. tmp (get 0))))))
+	          ; add new plot
+		  (. kmodes-combined-plot (add (create-kmodes-cluster-plot (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*))))
+		  (. plot-panel (setChart kmodes-combined-chart))
+		  (. plot-panel (setRangeZoomable false)))
 
-					  (. result-text (setText ""))
-					  (. statusbar
-					     (setText " file loaded")))
-;					(catch Exception e (. statusbar (setText " error while loading file"))))
-					(catch Exception e (JOptionPane/showMessageDialog nil "Error while loading file. See 'Help - File format'\nfor information about supported formats." "Error" JOptionPane/ERROR_MESSAGE)))
-				       ))))
+;(JOptionPane/showMessageDialog nil (str ) "" JOptionPane/ERROR_MESSAGE)
+		(do (. plot-panel (setChart plot-area))
+		    (. plot-panel (setRangeZoomable true))
+		    (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
+		    (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (data2plotdata (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*DIMX* @*DIMY*)))))
+
+	      (. boxplot-data (clear)) 
+	      (. result-text (setText ""))
+	      (. statusbar
+		 (setText " file loaded")))
+	    (catch Exception e (JOptionPane/showMessageDialog nil "Error while loading file. See 'Help - File format'\nfor information about supported formats." "Error" JOptionPane/ERROR_MESSAGE)))))))
 
 		(. menu-file-save
 		   (addActionListener
@@ -599,12 +724,19 @@
 		   (proxy [ActionListener] []
 			  (actionPerformed [evt]
 					   (show-preferences-panel)))))
+		
+		(. menu-exit
+		  (addActionListener
+		   (proxy [ActionListener] []
+			  (actionPerformed [evt]
+					   (System/exit 0)))))		
 				
 		(doto menu-file
 		  (. add menu-file-load)
 		  (. add menu-file-save)
 		  (. add menu-export-svg)
-		  (. add menu-preferences))
+		  (. add menu-preferences)
+		  (. add menu-exit))
 
 ;		(. menu-options-clusters
 ;		  (addActionListener
@@ -668,10 +800,10 @@
 		  (. add plot-panel BorderLayout/NORTH)
 		  (. add kmeans-options-panel BorderLayout/CENTER))
 
-		(doto kmodes-panel
-		  (. setLayout (new BorderLayout))
-		  (. add kmodes-plot-panel BorderLayout/NORTH)
-		  (. add kmodes-options-panel BorderLayout/CENTER))
+;		(doto kmodes-panel
+;		  (. setLayout (new BorderLayout))
+;		  (. add kmodes-plot-panel BorderLayout/NORTH)
+;		  (. add kmodes-options-panel BorderLayout/CENTER))
 
 		(doto cne-panel
 		  (. setLayout (new BorderLayout))
@@ -689,7 +821,8 @@
 			(. setJMenuBar menubar)
 			(. setLayout (new BorderLayout))
 			(. add tabbed-pane (. BorderLayout CENTER))
-			(. add result-panel (. BorderLayout SOUTH))
+			(. add info-panel (. BorderLayout SOUTH))
+;			(. add result-panel (. BorderLayout SOUTH))
 			(. pack)
 			(. setDefaultCloseOperation (. JFrame EXIT_ON_CLOSE)) ;uncomment this line to quit stand-alone app on frame close
 			(. setVisible true))))
@@ -735,7 +868,7 @@
 
 (defn -main [& args] 
   (if (nil? args)
-    (runGUI)
+    (SwingUtilities/invokeLater runGUI)
     (with-command-line args
       "Command line usage"
       [[infile i "The name of the input file."]
