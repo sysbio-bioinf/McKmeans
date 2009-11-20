@@ -8,7 +8,7 @@
      :doc "Multi-core kmeans cluster application"}
   (:use (mckmeans kmeans utils cne)
 	clojure.contrib.command-line)
-  (:import (javax.swing JFrame JLabel JButton JPanel JMenuBar JMenu JMenuItem JFileChooser JTextField JCheckBox JTextArea JScrollPane JTabbedPane JOptionPane SwingUtilities)
+  (:import (javax.swing JFrame JLabel JButton JPanel JMenuBar JMenu JMenuItem JFileChooser JTextField JCheckBox JTextArea JScrollPane JTabbedPane JOptionPane SwingUtilities GroupLayout JEditorPane)
 	   (javax.swing.filechooser FileFilter)
 	   (java.awt.event ActionListener KeyListener)
 	   (java.awt FlowLayout GridLayout BorderLayout Color)
@@ -46,18 +46,18 @@
       (aset-double (aget data 1) idx (nth (nth dataset idx) dimy)))
     (list data)))
 
-(defn data2snpplotdata [snpnum]
-  (let [numrows (count @*DATASET*)
-	len (alength (nth @*DATASET* snpnum))
+(defn data2snpplotdata [dataset snpnum]
+  (let [numrows (count dataset)
+	len (alength (nth dataset snpnum))
 	data (make-array (. Double TYPE) 2 len)]
     (dotimes [idx len]
       (aset-double (aget data 0) idx (inc idx))
-      (aset-double (aget data 1) idx (aget (nth @*DATASET* snpnum) idx)))
+      (aset-double (aget data 1) idx (aget (nth dataset snpnum) idx)))
     data))
 
 (defn make-snpplotdata
-  [snps]
-  (map #(data2snpplotdata %) snps))
+  [dataset snps]
+  (map #(data2snpplotdata dataset %) snps))
 
 (defn assignments2plotdata [dataset dimx dimy ass]
   (let [data (map (fn [x] (make-array (. Double TYPE) 2 (count (filter #(= x %) ass)))) (range @*K*))
@@ -81,13 +81,14 @@
 (defn create-kmodes-cluster-plot [clusterdata]
   (let [tmp-data (DefaultXYDataset.)
 	cluster-plot (. (. ChartFactory (createXYLineChart "" "" "SNP code" tmp-data (. PlotOrientation VERTICAL) false false false)) (getXYPlot))] ; refactor this line !!!
-    (doall (map (fn [idx x] (doto tmp-data (. addSeries idx x))) (iterate inc 0) (make-snpplotdata (range (count clusterdata)))))
+    (doall (map (fn [idx x] (doto tmp-data (. addSeries idx x))) (iterate inc 0) (make-snpplotdata clusterdata (range (count clusterdata)))))
     (.. cluster-plot getRangeAxis (setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
     (.. cluster-plot getDomainAxis (setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
     (.. cluster-plot getRangeAxis (setRange -0.5 2.5))
    
     cluster-plot))
 
+;; about panel
 (defn show-about-panel
   []
   (let [about-panel (JPanel.)
@@ -114,7 +115,16 @@
       (. pack)
       (. setVisible true))))
 
-; ### options panel
+;; help panel
+(defn show-help-panel
+  []
+  (let [editor-panel (JEditorPane.)
+	editor-frame (JFrame. "Help")]
+    (. editor-panel setEditable false)
+; (URL. "file:///......index.html")
+    (. editor-panel setText "index.html")))
+
+;; options panel
 (defn show-preferences-panel
   []
     (let [options-panel (JPanel.)
@@ -378,7 +388,7 @@
 ;	kmodes-plot-panel (ChartPanel. kmodes-chart)
 
 	boxplot-data (DefaultBoxAndWhiskerCategoryDataset.)
-	boxplot-chart (org.jfree.chart.ChartFactory/createBoxAndWhiskerChart "" "Cluster number k" "MCA-index" boxplot-data true)
+	boxplot-chart (org.jfree.chart.ChartFactory/createBoxAndWhiskerChart "" "cluster k" "MCA-index" boxplot-data true)
 	boxplot-panel (ChartPanel. boxplot-chart)
 
 
@@ -397,9 +407,9 @@
 	cluster-panel (new JPanel)
 	estimation-panel (new JPanel)
 
-	numcluster-text (new JTextField)
+	numcluster-text (new JTextField 7)
 	numcluster-label (new JLabel " Number of clusters k:")
-	maxiter-text (new JTextField)
+	maxiter-text (new JTextField 7)
 	maxiter-label (new JLabel " Maximal number of iterations:")
 	result-label (new JLabel " Resulting cluster assignments:")
 	result-text (new JTextArea 10 1)
@@ -414,11 +424,11 @@
 ;	estimate-label (new JLabel " Change cluster number estimation parameters:")
 	estimate-k-label (new JLabel " Maximal number of clusters k:")
 	estimate-run-label (new JLabel " Number of resamplings per cluster:")
-	estimate-k-text (new JTextField)
-	estimate-run-text (new JTextField)
-	estimate-button (new JButton "Run cluster number estimation")
+	estimate-k-text (new JTextField 7)
+	estimate-run-text (new JTextField 7)
+	estimate-button (new JButton "Run cluster number estimation!")
 	estimate-maxiter-label (JLabel. " Maximal number of iterations:")
-	estimate-maxiter-text (JTextField.)
+	estimate-maxiter-text (JTextField. 7)
 
 	result-panel (new JPanel)
 
@@ -467,7 +477,7 @@
 	   (. boxplot-data (clear))))))
 
     (doto info-panel
-      (. setLayout (FlowLayout. FlowLayout/LEFT))
+      (. setLayout (FlowLayout. FlowLayout/RIGHT))
       (. add info-swap-button)
       (. add info-sample-label)
       (. add info-sample-text)
@@ -535,9 +545,9 @@
 	   [evt]
 	   (. statusbar (setText " running cluster analysis ... this may take some time ..."))
 	   (dosync (ref-set *K* (try (. Integer (parseInt (. numcluster-text (getText)))) (catch Exception e @*K*))))
-	   (. numcluster-text (setText (pr-str @*K*)))
+	   (. numcluster-text (setText (str @*K*)))
 	   (dosync (ref-set *MAXITER* (try (. Integer (parseInt (. maxiter-text (getText)))) (catch Exception e @*MAXITER*))))
-	   (. maxiter-text (setText (pr-str @*MAXITER*)))
+	   (. maxiter-text (setText (str @*MAXITER*)))
 	   (let [res (kmeans (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*K* @*MAXITER* @*SNPMODE*)
 		 old (. plot-data (getSeriesCount))]
 	     (dosync (ref-set *RESULT* res))
@@ -762,43 +772,112 @@
 ;			(. add menu-options)
 			(. add menu-help))
 
-		(doto kmeans-options-panel
-		  (. setLayout (new GridLayout 4 2 5 5))
-		  (. add numcluster-label)
-		  (. add numcluster-text)
-		  (. add maxiter-label)
-		  (. add maxiter-text)
-		  (. add (JLabel. ""))
-		  (. add (JLabel. ""))
-		  (. add (JLabel. ""))
-		  (. add run-button))
+;; 		(doto kmeans-options-panel
+;; 		  (. setLayout (new GridLayout 4 2 5 5))
+;; 		  (. add numcluster-label)
+;; 		  (. add numcluster-text)
+;; 		  (. add maxiter-label)
+;; 		  (. add maxiter-text)
+;; 		  (. add (JLabel. ""))
+;; 		  (. add (JLabel. ""))
+;; 		  (. add (JLabel. ""))
+;; 		  (. add run-button))
+		
+		(let [layout (GroupLayout. kmeans-options-panel)
+		      parGrouplabelh (. layout (createParallelGroup))
+		      parGrouptexth (. layout (createParallelGroup))
+		      parGrouplabelv (. layout (createParallelGroup))
+		      parGrouptextv (. layout (createParallelGroup))
+		      seqGrouph (. layout (createSequentialGroup))
+		      seqGroupv (. layout (createSequentialGroup))]
+		  (. layout setAutoCreateGaps true)
+		  (. layout setAutoCreateContainerGaps true)
+		  (doto parGrouplabelh
+		    (. addComponent numcluster-label)
+		    (. addComponent maxiter-label))
+		  (doto parGrouptexth
+		    (. addComponent numcluster-text
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
+		    (. addComponent maxiter-text 
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
+		    (. addComponent run-button
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
+		  (doto seqGrouph
+		    (. addGroup parGrouplabelh)
+		    (. addGroup parGrouptexth))
+		  (. layout setHorizontalGroup seqGrouph)		  
+		  (doto parGrouplabelv
+		    (. addComponent numcluster-label)
+		    (. addComponent numcluster-text))
+		  (doto parGrouptextv
+		    (. addComponent maxiter-label)
+		    (. addComponent maxiter-text))
+		  (doto seqGroupv
+		    (. addGroup parGrouplabelv)
+		    (. addGroup parGrouptextv)
+		    (. addComponent run-button))
+		  (. layout setVerticalGroup seqGroupv)
+		  (. kmeans-options-panel setLayout layout))
 
-		(doto kmodes-options-panel
-		  (. setLayout (new GridLayout 4 2 5 5))
-		  (. add numcluster-kmodes-label)
-		  (. add numcluster-kmodes-text)
-		  (. add maxiter-kmodes-label)
-		  (. add maxiter-kmodes-text)
-		  (. add (JLabel. ""))
-		  (. add (JLabel. ""))
-		  (. add (JLabel. ""))
-		  (. add run-kmodes-button))
+		(let [layout (GroupLayout. cne-options-panel)
+		      parGrouplabelh (. layout (createParallelGroup))
+		      parGrouptexth (. layout (createParallelGroup))
+		      parGrouplabelv (. layout (createParallelGroup))
+		      parGrouptextv (. layout (createParallelGroup))
+		      parGrouprunv (. layout (createParallelGroup))
+		      seqGrouph (. layout (createSequentialGroup))
+		      seqGroupv (. layout (createSequentialGroup))]
+		  (. layout setAutoCreateGaps true)
+		  (. layout setAutoCreateContainerGaps true)
+		  (doto parGrouplabelh
+		    (. addComponent estimate-k-label)
+		    (. addComponent estimate-maxiter-label)
+		    (. addComponent estimate-run-label))
+		  (doto parGrouptexth
+		    (. addComponent estimate-k-text
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
+		    (. addComponent estimate-maxiter-text 
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
+		    (. addComponent estimate-run-text
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
+		    (. addComponent estimate-button
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
+		  (doto seqGrouph
+		    (. addGroup parGrouplabelh)
+		    (. addGroup parGrouptexth))
+		  (. layout setHorizontalGroup seqGrouph)		  
+		  (doto parGrouplabelv
+		    (. addComponent estimate-k-label)
+		    (. addComponent estimate-k-text))
+		  (doto parGrouptextv
+		    (. addComponent estimate-maxiter-label)
+		    (. addComponent estimate-maxiter-text))
+		  (doto parGrouprunv
+		    (. addComponent estimate-run-label)
+		    (. addComponent estimate-run-text))
+		  (doto seqGroupv
+		    (. addGroup parGrouplabelv)
+		    (. addGroup parGrouptextv)
+		    (. addGroup parGrouprunv)
+		    (. addComponent estimate-button))
+		  (. layout setVerticalGroup seqGroupv)
+		  (. cne-options-panel setLayout layout))
 
-		(doto cne-options-panel
-		  (. setLayout (new GridLayout 4 2 5 5))
-		  (. add estimate-k-label)
-		  (. add estimate-k-text)
-		  (. add estimate-maxiter-label)
-		  (. add estimate-maxiter-text)
-		  (. add estimate-run-label)
-		  (. add estimate-run-text)
-		  (. add (JLabel. ""))
-		  (. add estimate-button))
+;; 		(doto cne-options-panel
+;; 		  (. setLayout (new GridLayout 4 2 5 5))
+;; 		  (. add estimate-k-label)
+;; 		  (. add estimate-k-text)
+;; 		  (. add estimate-maxiter-label)
+;; 		  (. add estimate-maxiter-text)
+;; 		  (. add estimate-run-label)
+;; 		  (. add estimate-run-text)
+;; 		  (. add (JLabel. ""))
+;; 		  (. add estimate-button))
 
 		(doto kmeans-panel
 		  (. setLayout (new BorderLayout))
-		  (. add plot-panel BorderLayout/NORTH)
-		  (. add kmeans-options-panel BorderLayout/CENTER))
+		  (. add plot-panel BorderLayout/CENTER)
+		  (. add kmeans-options-panel BorderLayout/SOUTH))
 
 ;		(doto kmodes-panel
 ;		  (. setLayout (new BorderLayout))
@@ -807,8 +886,8 @@
 
 		(doto cne-panel
 		  (. setLayout (new BorderLayout))
-		  (. add boxplot-panel BorderLayout/NORTH)
-		  (. add cne-options-panel BorderLayout/CENTER))
+		  (. add boxplot-panel BorderLayout/CENTER)
+		  (. add cne-options-panel BorderLayout/SOUTH))
 
 		(doto tabbed-pane
 		  (. addTab "Cluster analysis" nil kmeans-panel "Perform cluster analysis")
@@ -817,15 +896,15 @@
 		  (. addTab "Cluster number estimation" nil cne-panel "Perform cluster number estimation"))
 
 		(doto frame
-			(. setSize 1000 1000)
-			(. setJMenuBar menubar)
-			(. setLayout (new BorderLayout))
-			(. add tabbed-pane (. BorderLayout CENTER))
-			(. add info-panel (. BorderLayout SOUTH))
+		  (. setSize 1280 1024)
+		  (. setJMenuBar menubar)
+		  (. setLayout (new BorderLayout))
+		  (. add tabbed-pane (. BorderLayout CENTER))
+		  (. add info-panel (. BorderLayout SOUTH))
 ;			(. add result-panel (. BorderLayout SOUTH))
-			(. pack)
-			(. setDefaultCloseOperation (. JFrame EXIT_ON_CLOSE)) ;uncomment this line to quit stand-alone app on frame close
-			(. setVisible true))))
+		  (. pack)
+		  (. setDefaultCloseOperation (. JFrame EXIT_ON_CLOSE))
+		  (. setVisible true))))
 
 
 (defn runKmeans [outfile]

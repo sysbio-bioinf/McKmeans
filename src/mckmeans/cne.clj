@@ -21,18 +21,17 @@
     (doall (pmap (fn [x] (whichmin (double-array (map #(distance x %) centers)))) dat))
     (doall (pmap (fn [x] (whichmin (double-array (map #(distance-snp x %) centers)))) dat))))
 
-(defn jack [dat k maxiter snpmode]
+(defn jack [dat k maxiter leaveout snpmode]
   (let [size (int (count dat))
-	leaveout (. Math (ceil (. Math (sqrt size))))
 	subsetidx (sample size (- size leaveout))
 	subset (doall (map #(nth dat %1) subsetidx))
 	kmeansres (kmeans subset k maxiter snpmode)]
     (predict-assignment dat (:centers kmeansres) snpmode)))
 
 (defn jackknife-kmeans
-  [dat nrun k maxiter snpmode]
+  [dat nrun k maxiter leaveout snpmode]
   (let [nrun (int nrun)]
-    (vec (doall (pmap (fn [_] (jack dat k maxiter snpmode)) (range nrun))))))
+    (vec (doall (pmap (fn [_] (jack dat k maxiter leaveout snpmode)) (range nrun))))))
 
 ;(defn jackknife-kmeans
 ;  "Do jackknife resampling nrun times. Each time calculate kmeans result for the whole dataset"
@@ -54,7 +53,9 @@
 (defn kloop-jackknife-kmeans
   "Do jackknife resampling nrun times for all k in ks"
   [dat nrun ks maxiter snpmode]
-  (vec (reverse (doall (pmap #(jackknife-kmeans dat nrun % maxiter snpmode) ks)))))
+  (let [size (int (count dat))
+	leaveout (. Math (ceil (. Math (sqrt size))))]
+    (vec (reverse (doall (pmap #(jackknife-kmeans dat nrun % maxiter leaveout snpmode) ks))))))
 
 ;(defn kloop-jackknife-kmeans
 ;  "Do jackknife resampling nrun times for all k in ks"
@@ -70,10 +71,10 @@
   [dat nrun ks snpmode]
   (let [size (count dat)]
     (vec (reverse (doall (pmap (fn [x]
-			(vec (doall (pmap (fn [_] 
-					    (let [centers (map #(nth dat %) (sample size x))]
-					      (predict-assignment dat centers snpmode)))
-					    (range nrun))))) ks))))))
+				 (vec (doall (pmap (fn [_] 
+						     (let [centers (map #(nth dat %) (sample size x))]
+						       (predict-assignment dat centers snpmode)))
+						   (range nrun))))) ks))))))
 
 ;(defn calculate-baselines
 ;  ""
