@@ -10,7 +10,8 @@
 	clojure.contrib.command-line)
   (:import (javax.swing JFrame JLabel JButton JPanel JMenuBar JMenu JMenuItem JFileChooser JTextField JCheckBox JTextArea JScrollPane JTabbedPane JOptionPane SwingUtilities GroupLayout JEditorPane)
 	   (javax.swing.filechooser FileFilter)
-	   (java.awt.event ActionListener KeyListener HyperlinkListener)
+	   (javax.swing.event HyperlinkListener)
+	   (java.awt.event ActionListener KeyListener)
 	   (java.awt FlowLayout GridLayout BorderLayout Color)
 	   (java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter)
 	   (org.jfree.data.xy DefaultXYDataset)
@@ -125,20 +126,39 @@
                <title>McKmeans Help</title>
                </head>
                <body>
-               <h1>Hier sollte die Hilfe stehen</h1>
-               Hier der Text dazu. Gaaaanz viel Teeeeeeeeeeeeeeeeeeext.<br>
-               <a href=\"help-load\">Howto load</a>
+               <h1>McKmeans: A highly efficient multi-core k-means algorithm for clustering extremely large datasets.</h1>
+               <ul>
+               <li><a href=\"help-usage\">Basic usage</a></li>
+               <li><a href=\"help-load\">Input file format</a></li>
+               <li><a href=\"help-online\">Online help</a></li>
+               </ul>
+               </body>
+               </html>"
+	help-usage "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2//EN\"
+               \"http://www.w3.org/TR/html4/loose.dtd\">
+               <html>
+               <head>
+               <title>McKmeans Help</title>
+               </head>
+               <body>
+               <h1>Basic usage</h1>
+               <h2>Load data</h2>
+               First load a gene expression or SNP data set via 'File -> Load'. The required input file format is described <a href=\"help-load\">here</a>. In case of gene expression data, the first two features of the data set are displayed as a scatterplot in the plotting region. The features to plot can be changed in the preferences menu 'File -> Preferences'. SNP data is displayed as a parallel coordinate plot. Information about the number samples and features is displayed on the bottom right. After loading the input data can be transposed to switch between clustering samples and features by pressing the 'Transpose!' button
+               <h2>Cluster analysis</h2>
+Choose the number of clusters and the maximal number of iterations for the K-means algorithm. The clustering starts by clicking on the 'Cluster!' button. The cluster analysis may take a while, e.g. 25 minutes for clustering a data set containing 1000000 samples with 100 features into 20 clusters on a dual-quad core computer. The resulting clustering is displayed in the plotting area. Additionally, the assignment vector can be saved via 'File -> Save'.
+               <h2>Cluster number estimation</h2>
+               Switch to the cluster number estimation panel by choosing the second tab in the main window. Choose the maximal number of clusters, the maximal number of iterations per clustering, and the maximal number of runs per clustering. Press 'Cluster number estimation' to start the process. Depending on the data size, this may take several hours. The result is displayed in the boxplot area. Red boxes show the MCA-index from evaluating cluster results. Blue boxes show a random baseline for the MCA-index. The best number of clusters is reported for the number k with the largest difference between mean MCA-index from clustering and mean MCA-index from baseline evalution. It is also displayed on the cluster analysis tab.
                </body>
                </html>"
 	help-load "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2//EN\"
                \"http://www.w3.org/TR/html4/loose.dtd\">
                <html>
                <head>
-               <title>File load</title>
+               <title>McKmeans help</title>
                </head>
                <body>
-               <h1>Howto load files</h1>
-               Hier der Text dazu. Gaaaanz viel Teeeeeeeeeeeeeeeeeeext.
+               <h1>Input file format</h1>
+               Input is required to be in CSV file format. Each row is a data point, each column is a feature. Columns are separated by ','. The file should not include a header line. SNP data has to be encoded as '0,1,2' for 'homozygotous reference, heterozygotous, homozygotous alternative'. For clustering snp files, the suffix has to be changed to '.snp'.
                </body>
                </html>"
 	editor-panel (JEditorPane. "text/html" help-index)
@@ -156,7 +176,8 @@
 	   (if (= (. evt getEventType) (. javax.swing.event.HyperlinkEvent$EventType ACTIVATED))
 	     (let [description (. evt (getDescription))]
 	       (cond (= description "help-load") (. editor-panel (setText help-load))
-		     )))))))
+		     (= description "help-usage") (. editor-panel (setText help-usage))
+		     (= description "help-online") (. editor-panel (setPage "http://www.informatik.uni-ulm.de/ni/staff/HKestler/parallelkmeans")))))))))
     (doto button-panel
       (. setLayout (FlowLayout. FlowLayout/RIGHT))
       (. add contents-button)
@@ -175,7 +196,7 @@
 	  (. editor-panel (setText help-index))))))
     (doto help-frame
       (. setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)
-      (. setSize 400 400)
+      (. setSize 1000 1000)
       (. setLayout (new BorderLayout))
       (. add scroll-panel BorderLayout/CENTER)
       (. add button-panel BorderLayout/SOUTH)
@@ -422,7 +443,7 @@
 
 	menu-help (new JMenu "Help")
 	menu-help-about (new JMenuItem "About")
-
+	menu-help-help (new JMenuItem "Help")
 	tabbed-pane (JTabbedPane.)
 
 	kmeans-panel (JPanel.)
@@ -821,8 +842,14 @@
 			   (actionPerformed [evt]
 					    (show-about-panel)))))
 ;					    (. statusbar (setText " about - not working yet"))))))
+		(. menu-help-help
+		   (addActionListener
+		    (proxy [ActionListener] []
+			   (actionPerformed [evt]
+					    (show-help-panel)))))
 	
 		(doto menu-help
+		  (. add menu-help-help)
 		  (. add menu-help-about))
 		
 		(doto menubar
