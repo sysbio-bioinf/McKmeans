@@ -10,7 +10,7 @@
 	clojure.contrib.command-line)
   (:import (javax.swing JFrame JLabel JButton JPanel JMenuBar JMenu JMenuItem JFileChooser JTextField JCheckBox JTextArea JScrollPane JTabbedPane JOptionPane SwingUtilities GroupLayout JEditorPane)
 	   (javax.swing.filechooser FileFilter)
-	   (java.awt.event ActionListener KeyListener)
+	   (java.awt.event ActionListener KeyListener HyperlinkListener)
 	   (java.awt FlowLayout GridLayout BorderLayout Color)
 	   (java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter)
 	   (org.jfree.data.xy DefaultXYDataset)
@@ -118,11 +118,69 @@
 ;; help panel
 (defn show-help-panel
   []
-  (let [editor-panel (JEditorPane.)
-	editor-frame (JFrame. "Help")]
+  (let [help-index "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2//EN\"
+               \"http://www.w3.org/TR/html4/loose.dtd\">
+               <html>
+               <head>
+               <title>McKmeans Help</title>
+               </head>
+               <body>
+               <h1>Hier sollte die Hilfe stehen</h1>
+               Hier der Text dazu. Gaaaanz viel Teeeeeeeeeeeeeeeeeeext.<br>
+               <a href=\"help-load\">Howto load</a>
+               </body>
+               </html>"
+	help-load "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2//EN\"
+               \"http://www.w3.org/TR/html4/loose.dtd\">
+               <html>
+               <head>
+               <title>File load</title>
+               </head>
+               <body>
+               <h1>Howto load files</h1>
+               Hier der Text dazu. Gaaaanz viel Teeeeeeeeeeeeeeeeeeext.
+               </body>
+               </html>"
+	editor-panel (JEditorPane. "text/html" help-index)
+	scroll-panel (JScrollPane. editor-panel)
+	button-panel (JPanel.)
+	help-frame (JFrame. "Help")
+	close-button (JButton. "Close")
+	contents-button (JButton. "Contents")]
     (. editor-panel setEditable false)
-; (URL. "file:///......index.html")
-    (. editor-panel setText "index.html")))
+    (. editor-panel 
+       (addHyperlinkListener
+	(proxy [HyperlinkListener] []
+	  (hyperlinkUpdate
+	   [evt]
+	   (if (= (. evt getEventType) (. javax.swing.event.HyperlinkEvent$EventType ACTIVATED))
+	     (let [description (. evt (getDescription))]
+	       (cond (= description "help-load") (. editor-panel (setText help-load))
+		     )))))))
+    (doto button-panel
+      (. setLayout (FlowLayout. FlowLayout/RIGHT))
+      (. add contents-button)
+      (. add close-button))
+    (. close-button
+      (addActionListener
+       (proxy [ActionListener] []
+	 (actionPerformed
+	  [evt]
+	  (. help-frame (dispose))))))
+    (. contents-button
+      (addActionListener
+       (proxy [ActionListener] []
+	 (actionPerformed
+	  [evt]
+	  (. editor-panel (setText help-index))))))
+    (doto help-frame
+      (. setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)
+      (. setSize 400 400)
+      (. setLayout (new BorderLayout))
+      (. add scroll-panel BorderLayout/CENTER)
+      (. add button-panel BorderLayout/SOUTH)
+      (. pack)
+      (. setVisible true))))
 
 ;; options panel
 (defn show-preferences-panel
