@@ -158,7 +158,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
                </head>
                <body>
                <h1>Input file format</h1>
-               Input is required to be in CSV file format. Each row is a data point, each column is a feature. Columns are separated by ','. The file should not include a header line. SNP data has to be encoded as '0,1,2' for 'homozygotous reference, heterozygotous, homozygotous alternative'. For clustering snp files, the suffix has to be changed to '.snp'.
+               Input is required to be in CSV file format. Each row is a data point, each column is a feature. Columns are separated by ','. The file must not include a header line. SNP data has to be encoded as '0,1,2' for 'homozygotous reference, heterozygotous, homozygotous alternative'. For clustering snp files, the suffix has to be changed to '.snp'.
                </body>
                </html>"
 	editor-panel (JEditorPane. "text/html" help-index)
@@ -788,8 +788,10 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 				       (try
 					(let [ret (. file-chooser (showSaveDialog frame))
 					      filename (. (. file-chooser (getSelectedFile)) (getPath))
-					      restext (.. (pr-str (:cluster @*RESULT*)) (replace "(" "") (replace ")" ""))]
-					  (save-result filename restext)
+;					      restext (.. (pr-str (:cluster @*RESULT*)) (replace "(" "") (replace ")" ""))]
+					      res (:cluster @*RESULT*)]
+;					  (save-result filename restext)
+					  (write-csv res filename "," false list-parse-csv)
 					  (. statusbar
 					     (setText " result saved")))
 					(catch Exception e (. statusbar (setText " error while saving file"))))
@@ -988,7 +990,8 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 		  (. add info-panel (. BorderLayout SOUTH))
 ;			(. add result-panel (. BorderLayout SOUTH))
 		  (. pack)
-		  (. setDefaultCloseOperation (. JFrame EXIT_ON_CLOSE))
+		  (. setDefaultCloseOperation JFrame/EXIT_ON_CLOSE)
+;		  (. setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)
 		  (. setVisible true))))
 
 

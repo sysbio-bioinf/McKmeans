@@ -6,7 +6,7 @@
 (ns mckmeans.utils
   (:use clojure.contrib.def clojure.contrib.duck-streams)
   (:import (cern.jet.random.sampling RandomSamplingAssistant)
-	   (java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter))
+	   (java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter PrintWriter))
   (:gen-class))
 
 ;(import '(cern.jet.random.sampling RandomSamplingAssistant)
@@ -60,6 +60,19 @@
   [filename sc header csvparser]
   (let [lines (read-lines filename)]
     (vec (doall (map #(apply csvparser % (list sc)) (drop (if header 1 0) lines))))))
+
+(defn list-parse-csv
+  [l #^String sc]
+  (.. (str l) (replace "(" "") (replace ")" "") (replace " " sc)))
+
+(defn vec-parse-csv
+  [l #^String sc]
+  (.. (str l) (replace "[" "") (replace "]" "") (replace " " sc)))
+
+(defn write-csv
+  [lines filename sc header csvparser]
+  (with-open [writer (PrintWriter. (BufferedWriter. (FileWriter. filename)))]
+    (dorun (map #(.println writer (apply csvparser % (list sc))) lines))))
 
 (defn save-result
   [#^String filename #^String res]
