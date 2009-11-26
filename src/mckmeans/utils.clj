@@ -4,7 +4,7 @@
 ;;;;
 
 (ns mckmeans.utils
-  (:use mckmeans.gui clojure.contrib.def clojure.contrib.duck-streams clojure.contrib.seq-utils)
+  (:use clojure.contrib.def clojure.contrib.duck-streams clojure.contrib.seq-utils)
   (:import (cern.jet.random.sampling RandomSamplingAssistant)
 	   (java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter PrintWriter);)
 
@@ -71,12 +71,14 @@
   "Get double-arry from csv-like string using separator sc, e.g. '1,2,3,4.5'."
   [#^String s #^String sc]
   (let [string-array (.split s sc)]
-    (double-array (map #(Double/parseDouble %) string-array))))
-
+     (double-array (map #(Double/parseDouble %) string-array))))
+  
 (defn read-csv
   [filename sc header csvparser]
-  (let [lines (read-lines filename)]
-    (vec (doall (map #(apply csvparser % (list sc)) (drop (if header 1 0) lines))))))
+  (let [lines (read-lines filename)
+	sc (list sc)]
+;    (vec (doall (map #(apply csvparser % sc) (drop (if header 1 0) lines))))))
+    (vec (doall (map #(apply csvparser % sc) (drop (if (. (first (first lines)) equals (first "#")) 1 0) lines))))))
 
 (defn list-parse-csv
   [l #^String sc]
@@ -88,8 +90,9 @@
 
 (defn write-csv
   [lines #^String filename sc header csvparser]
-  (with-open [writer (PrintWriter. (BufferedWriter. (FileWriter. filename)))]
-    (dorun (map #(.println writer (apply csvparser % (list sc))) lines))))
+  (let [sc (list sc)]
+    (with-open [writer (PrintWriter. (BufferedWriter. (FileWriter. filename)))]
+      (dorun (map #(.println writer (apply csvparser % sc)) lines)))))
 
 (defn save-result
   [#^String filename #^String res]
@@ -279,22 +282,4 @@
 ;(println "delta: " delta)
 ;(println "newproj0: " (vec newproj0))
 ;(println "newproj1: " (vec newproj1))
-
-
-
-(defn plot-sammon [dat]
-  (let [plot-data (DefaultXYDataset.)
-	plot-area (. ChartFactory (createScatterPlot "" "x" "y" plot-data (. PlotOrientation VERTICAL) true false false))
-	plot-panel (ChartPanel. plot-area)
-	plot-frame (JFrame.)]
-
-    (doall (map (fn [idx x] (doto plot-data (. addSeries (str idx) x))) (iterate inc 1) (data2plotdata dat 0 1)))
-
-    (doto plot-frame
-      (. setSize 400 400)
-      (. setLayout (new BorderLayout))
-      (. add plot-panel (. BorderLayout CENTER))
-      (. pack)
-      (. setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)
-      (. setVisible true))))
 

@@ -89,6 +89,23 @@
    
     cluster-plot))
 
+;; plot-sammon
+;; (defn plot-sammon [dat]
+;;   (let [plot-data (DefaultXYDataset.)
+;; 	plot-area (. ChartFactory (createScatterPlot "" "x" "y" plot-data (. PlotOrientation VERTICAL) true false false))
+;; 	plot-panel (ChartPanel. plot-area)
+;; 	plot-frame (JFrame.)]
+
+;;     (doall (map (fn [idx x] (doto plot-data (. addSeries (str idx) x))) (iterate inc 1) (data2plotdata dat 0 1)))
+
+;;     (doto plot-frame
+;;       (. setSize 400 400)
+;;       (. setLayout (new BorderLayout))
+;;       (. add plot-panel (. BorderLayout CENTER))
+;;       (. pack)
+;;       (. setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)
+;;       (. setVisible true))))
+
 ;; about panel
 (defn show-about-panel
   []
@@ -97,7 +114,7 @@
 	about-text (JTextArea. 5 1)
 	close-button (JButton. "Close")]
     (. about-text (setEditable false))
-    (. about-text (setText "\tMcKmeans\n\nThis is the mulit-core K-means cluster\napplication. Perform K-means cluster\nanalysis and cluster number\nestimation while using all\nyour hardware.\n\nVersion:\t0.42\nAuthors:\tJohann M. Kraus\n\tHans A. Kestler\nCopyright:\tArtistic Licence 2.0"))
+    (. about-text (setText "\tMcKmeans\n\nMulti-core K-means cluster analysis.\n\nVersion:\t0.42\nAuthors:\tJohann M. Kraus\n\tHans A. Kestler\nCopyright:\tArtistic Licence 2.0"))
     (. close-button
       (addActionListener
        (proxy [ActionListener] []
@@ -130,6 +147,7 @@
                <ul>
                <li><a href=\"help-usage\">Basic usage</a></li>
                <li><a href=\"help-load\">Input file format</a></li>
+               <li><a href=\"help-sammon\">Sammon's projection</a></li>
                <li><a href=\"help-online\">Online help</a></li>
                </ul>
                </body>
@@ -143,7 +161,7 @@
                <body>
                <h1>Basic usage</h1>
                <h2>Load data</h2>
-               First load a gene expression or SNP data set via 'File -> Load'. The required input file format is described <a href=\"help-load\">here</a>. Information about the number of rows and colums is displayed on the bottom right. The data is always clustered row-wise. The input data can be transposed to switch rows and columns by pressing the 'Transpose data set!' button. In case of gene expression data, the first two columns of the data set are displayed in a scatterplot in the plotting region. The columns to plot can be changed in the preferences menu 'File -> Preferences'. SNP data is displayed as a parallel coordinate plot.
+               First load a gene expression or SNP data set via 'File -> Load'. The required input file format is described <a href=\"help-load\">here</a>. Information about the number of rows and colums is displayed on the bottom right. The data is always clustered row-wise. The input data can be transposed to switch rows and columns by pressing the 'Transpose data set!' button. In case of gene expression data, the first two columns of the data set are displayed in a scatterplot in the plotting region. The columns to plot can be changed in the preferences menu 'File -> Preferences'. Alternatively, the data can be plotted as a 2-dimensional non-linear projection, see <a href=\"help-sammon\">Sammon's projection</a> for details. SNP data is displayed as a parallel coordinate plot.
                <h2>Cluster analysis</h2>
 Choose the number of clusters and the maximal number of iterations for the K-means algorithm. The clustering starts by clicking on the 'Cluster!' button. The cluster analysis may take a while, e.g. 25 minutes for clustering a data set containing 1000000 rows with 100 columns into 20 clusters on a dual-quad core computer. The resulting clustering is displayed in the plotting area. Additionally, the assignment vector can be saved via 'File -> Save'.
                <h2>Cluster number estimation</h2>
@@ -158,7 +176,18 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
                </head>
                <body>
                <h1>Input file format</h1>
-               Input is required to be in CSV file format. The data is clustered by rows, but it can be transposed after loading for also clustering columns. Columns are separated by ','. The file must not include a header line. SNP data has to be encoded as '0,1,2' for 'homozygotous reference, heterozygotous, homozygotous alternative'. For clustering snp files, the suffix has to be changed to '.snp'.
+               Input is required to be in CSV file format. The data is clustered by rows, but it can be transposed after loading for also clustering columns. Columns are separated by ','. Lines starting with the character '#' (e.g. header line) are omitted. SNP data has to be encoded as '0,1,2' for 'homozygotous reference, heterozygotous, homozygotous alternative'. For clustering snp files, the suffix has to be changed to '.snp'.
+               </body>
+               </html>"
+	help-sammon "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2//EN\"
+               \"http://www.w3.org/TR/html4/loose.dtd\">
+               <html>
+               <head>
+               <title>McKmeans help</title>
+               </head>
+               <body>
+               <h1>Sammon's projection</h1>
+               Sammon's projection method [1] is a non-linear projection method to map high-dimensional data to lower dimensionality. Our implementation uses a heuristic proposed by Kohonen [2] to decrease runtime. However, for large data sets (> 500 rows) the computation may take several minutes.<br><br>[1] J. W. Sammon, Jr. 'A nonlinear mapping for data structure analysis'. IEEE Transactions on Computers, 18, pp. 401–409, 1969.<br>[2] T. Kohonen. Self Organizing Maps. Springer, 3 edition, 2001
                </body>
                </html>"
 	editor-panel (JEditorPane. "text/html" help-index)
@@ -177,7 +206,11 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	     (let [description (. evt (getDescription))]
 	       (cond (= description "help-load") (. editor-panel (setText help-load))
 		     (= description "help-usage") (. editor-panel (setText help-usage))
-		     (= description "help-online") (. editor-panel (setPage "http://www.informatik.uni-ulm.de/ni/staff/HKestler/parallelkmeans")))))))))
+		     (= description "help-sammon") (. editor-panel (setText help-sammon))
+		     (= description "help-online") (.. java.awt.Desktop getDesktop (browse (java.net.URI. "http://www.informatik.uni-ulm.de/ni/staff/HKestler/parallelkmeans"))))))))))
+;		     (= description "help-online") (. editor-panel (setPage "http://www.informatik.uni-ulm.de/ni/staff/HKestler/parallelkmeans"))
+;		     :default (.. java.awt.Desktop getDesktop (browse (java.net.URI. description))))))))))
+
     (doto button-panel
       (. setLayout (FlowLayout. FlowLayout/RIGHT))
       (. add contents-button)
@@ -259,88 +292,88 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
       (. setVisible true))))
 
 
-(defn show-options-panel
-  ""
-  []
-  (let [options-panel (JPanel.)
-	options-frame (JFrame. "Options")
-	dim-label (new JLabel " Select columns to plot:")
-	dimx-label (new JLabel " dim x:")
-	dimy-label (new JLabel " dim y:")
-	dimx-text (new JTextField)
-	dimy-text (new JTextField)
-	maxiter-text (new JTextField)
-	maxiter-label (new JLabel "Maximal number of iterations:")
-	estimate-label (new JLabel "Cluster number estimation parameters:")
-	estimate-run-label (new JLabel "Number of resamplings per cluster:")
-	estimate-run-text (new JTextField)
-	parameter-label (new JLabel "K-means parameters:")
-	save-estimation (new JCheckBox "Save cluster results" false)
-	update-button (new JButton "Update")]
+;; (defn show-options-panel
+;;   ""
+;;   []
+;;   (let [options-panel (JPanel.)
+;; 	options-frame (JFrame. "Options")
+;; 	dim-label (new JLabel " Select columns to plot:")
+;; 	dimx-label (new JLabel " dim x:")
+;; 	dimy-label (new JLabel " dim y:")
+;; 	dimx-text (new JTextField)
+;; 	dimy-text (new JTextField)
+;; 	maxiter-text (new JTextField)
+;; 	maxiter-label (new JLabel "Maximal number of iterations:")
+;; 	estimate-label (new JLabel "Cluster number estimation parameters:")
+;; 	estimate-run-label (new JLabel "Number of resamplings per cluster:")
+;; 	estimate-run-text (new JTextField)
+;; 	parameter-label (new JLabel "K-means parameters:")
+;; 	save-estimation (new JCheckBox "Save cluster results" false)
+;; 	update-button (new JButton "Update")]
 
-    (. update-button
-       (addActionListener
-        (proxy [ActionListener] []
-	  (actionPerformed [evt]
-			   (let [eruns (try (. Integer (parseInt (. estimate-run-text (getText)))) (catch Exception e @*ERUNS*))
-				 maxiter (try (. Integer (parseInt (. maxiter-text (getText)))) (catch Exception e @*MAXITER*))
-				 dimx (try (. Integer (parseInt (. dimx-text (getText)))) (catch Exception e @*DIMX*))
-				 dimy (try (. Integer (parseInt (. dimy-text (getText)))) (catch Exception e @*DIMY*))
-				 saveres (not (nil? (. save-estimation (getSelectedObjects))))]
-			     (dosync (ref-set *DIMX* dimx))
-			     (dosync (ref-set *DIMY* dimy))
-			     (dosync (ref-set *MAXITER* maxiter))
-			     (dosync (ref-set *ERUNS* eruns))
-			     (dosync (ref-set *SAVERES* saveres)))
-			   (. options-frame (dispose))))))
+;;     (. update-button
+;;        (addActionListener
+;;         (proxy [ActionListener] []
+;; 	  (actionPerformed [evt]
+;; 			   (let [eruns (try (. Integer (parseInt (. estimate-run-text (getText)))) (catch Exception e @*ERUNS*))
+;; 				 maxiter (try (. Integer (parseInt (. maxiter-text (getText)))) (catch Exception e @*MAXITER*))
+;; 				 dimx (try (. Integer (parseInt (. dimx-text (getText)))) (catch Exception e @*DIMX*))
+;; 				 dimy (try (. Integer (parseInt (. dimy-text (getText)))) (catch Exception e @*DIMY*))
+;; 				 saveres (not (nil? (. save-estimation (getSelectedObjects))))]
+;; 			     (dosync (ref-set *DIMX* dimx))
+;; 			     (dosync (ref-set *DIMY* dimy))
+;; 			     (dosync (ref-set *MAXITER* maxiter))
+;; 			     (dosync (ref-set *ERUNS* eruns))
+;; 			     (dosync (ref-set *SAVERES* saveres)))
+;; 			   (. options-frame (dispose))))))
 
-    (. dimx-text (setText (pr-str @*DIMX*)))
-    (. dimy-text (setText (pr-str @*DIMY*)))
-    (. maxiter-text (setText (pr-str @*MAXITER*)))
-    (. estimate-run-text (setText (pr-str @*ERUNS*)))
-    (. save-estimation (setSelected @*SAVERES*))
+;;     (. dimx-text (setText (pr-str @*DIMX*)))
+;;     (. dimy-text (setText (pr-str @*DIMY*)))
+;;     (. maxiter-text (setText (pr-str @*MAXITER*)))
+;;     (. estimate-run-text (setText (pr-str @*ERUNS*)))
+;;     (. save-estimation (setSelected @*SAVERES*))
     
-    (doto options-panel
-      (. setLayout (new GridLayout 7 3 5 5))
+;;     (doto options-panel
+;;       (. setLayout (new GridLayout 7 3 5 5))
       
-      (. add dim-label)
-      (. add dimx-label)
-      (. add dimy-label)
-                        ;(. add (new JLabel ""))
-      (. add (new JLabel ""))
-      (. add dimx-text)
-      (. add dimy-text)
-                        ;(. add plot-button)
+;;       (. add dim-label)
+;;       (. add dimx-label)
+;;       (. add dimy-label)
+;;                         ;(. add (new JLabel ""))
+;;       (. add (new JLabel ""))
+;;       (. add dimx-text)
+;;       (. add dimy-text)
+;;                         ;(. add plot-button)
 
-      (. add parameter-label)
-                        ;(. add numcluster-label)
-      (. add maxiter-label)
-      (. add (new JLabel ""))
-      (. add (new JLabel ""))
-                        ;(. add numcluster-text)
-      (. add maxiter-text)
-      (. add (new JLabel ""))
-                        ;(. add run-button)
+;;       (. add parameter-label)
+;;                         ;(. add numcluster-label)
+;;       (. add maxiter-label)
+;;       (. add (new JLabel ""))
+;;       (. add (new JLabel ""))
+;;                         ;(. add numcluster-text)
+;;       (. add maxiter-text)
+;;       (. add (new JLabel ""))
+;;                         ;(. add run-button)
 
-      (. add estimate-label)
-                                        ;(. add estimate-k-label)
-      (. add estimate-run-label)
-      (. add (new JLabel ""))
-      (. add (new JLabel ""))
-                        ;(. add estimate-k-text)
-      (. add estimate-run-text)
-                        ;(. add estimate-button))
-      (. add (new JLabel ""))
-      (. add save-estimation)
-      (. add (new JLabel ""))
-      (. add update-button))
+;;       (. add estimate-label)
+;;                                         ;(. add estimate-k-label)
+;;       (. add estimate-run-label)
+;;       (. add (new JLabel ""))
+;;       (. add (new JLabel ""))
+;;                         ;(. add estimate-k-text)
+;;       (. add estimate-run-text)
+;;                         ;(. add estimate-button))
+;;       (. add (new JLabel ""))
+;;       (. add save-estimation)
+;;       (. add (new JLabel ""))
+;;       (. add update-button))
 
-    (doto options-frame
-      (. setSize 400 400)
-      (. setLayout (new BorderLayout))
-      (. add options-panel)
-      (. pack)
-      (. setVisible true))))
+;;     (doto options-frame
+;;       (. setSize 400 400)
+;;       (. setLayout (new BorderLayout))
+;;       (. add options-panel)
+;;       (. pack)
+;;       (. setVisible true))))
 
 (defn exportChart2SVG
   ""
@@ -516,19 +549,22 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	info-panel (JPanel.)
 	info-sample-text (JTextField. 7)
 	info-feature-text (JTextField. 7)
-	info-sample-label (JLabel. "Number of samples:")
-	info-feature-label (JLabel. "Number of features:")
+	info-sample-label (JLabel. "Number of rows:")
+	info-feature-label (JLabel. "Number of columns:")
 	info-swap-button (JButton. "Transpose data!")
 
 	sammon-button (JButton. "Sammon's projection!")]
 
-(. sammon-button
-   (addActionListener
-    (proxy [ActionListener] []
-      (actionPerformed
-       [evt]
-       (let [res (sammon (if @*TRANSPOSED* @*TDATASET* @*DATASET*) 10 2)]
-	 (plot-sammon res))))))
+    (. sammon-button
+       (addActionListener
+	(proxy [ActionListener] []
+	  (actionPerformed
+	   [evt]
+	   (let [res (sammon (if @*TRANSPOSED* @*TDATASET* @*DATASET*) 10 2)]
+	     ; remove old plots
+	     (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc (. plot-data (getSeriesCount)))))))
+	     ; add new plots
+	     (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (data2plotdata res 0 1))))))))
 
     (. info-sample-text (setBackground Color/lightGray))
     (. info-feature-text (setBackground Color/lightGray))
@@ -564,7 +600,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	   (. boxplot-data (clear))))))
     (doto info-panel
       (. setLayout (FlowLayout. FlowLayout/RIGHT))
-(. add sammon-button)
+      (. add sammon-button)
       (. add info-swap-button)
       (. add info-sample-label)
       (. add info-sample-text)
@@ -628,15 +664,8 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
     (.. boxplot-chart getCategoryPlot (setDomainGridlinePosition CategoryAnchor/MIDDLE))
     (.. boxplot-chart getCategoryPlot (setDomainGridlinesVisible true))
 
-;    (.. kmodes-chart getCategoryPlot getRangeAxis (setRange -0.5 2.5))
-;    (.. kmodes-chart getCategoryPlot getRangeAxis (setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
-;    (.. kmodes-chart getCategoryPlot (setDomainGridlinesVisible true))
-
-;    (.. kmodes-chart getPlot getRangeAxis (setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
-;    (.. kmodes-chart getPlot getDomainAxis (setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
-;    (.. kmodes-chart getPlot getRangeAxis (setRange -0.5 2.5))
     (.. kmodes-combined-plot getDomainAxis (setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
-;    (.. kmodes-combined-plot getRangeAxis (setRange -0.5 2.5))
+
     (. kmodes-combined-chart (removeLegend))
 
     (. plot-panel (setPopupMenu nil))
@@ -649,8 +678,6 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
     (. numcluster-kmodes-text (setText (pr-str @*K*)))
     (. maxiter-kmodes-text (setText (pr-str @*MAXITER*)))
 
-;    (. dimx-text (setText "0"))
-;    (. dimy-text (setText "1"))
     (. estimate-k-text (setText (pr-str @*CNEMAX*)))
     (. estimate-run-text (setText (pr-str @*ERUNS*)))
     (. estimate-maxiter-text (setText (pr-str @*MAXITER*)))
@@ -791,7 +818,8 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	      (. info-feature-text (setText (str (alength (first dataset)))))
 
 	      (if @*SNPMODE*
-		(do
+		(do ; hide sammon-button
+		  (. sammon-button (setVisible false))
 		  ; remove old plots
 		  (let [tmp (. kmodes-combined-plot (getSubplots))]
 		    (dotimes [i (. tmp (size))]
@@ -799,10 +827,15 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	          ; add new plot
 		  (. kmodes-combined-plot (add (create-kmodes-cluster-plot (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*))))
 		  (. plot-panel (setChart kmodes-combined-chart))
-		  (. plot-panel (setRangeZoomable false)))
+		  (. plot-panel (setRangeZoomable false))
+;		  (let [tt (. kmodes-combined-plot (getRenderer 0))]
+;		    (. tt (setSeriesPaint 0 Color/BLACK)))
+)
 
 ;(JOptionPane/showMessageDialog nil (str ) "" JOptionPane/ERROR_MESSAGE)
-		(do (. plot-panel (setChart plot-area))
+		(do ;show sammon-button
+		  (. sammon-button (setVisible true)) 
+		  (. plot-panel (setChart plot-area))
 		    (. plot-panel (setRangeZoomable true))
 		    (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
 		    (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (data2plotdata (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*DIMX* @*DIMY*)))))
