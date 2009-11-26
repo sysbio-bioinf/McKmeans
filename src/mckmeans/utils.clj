@@ -4,7 +4,7 @@
 ;;;;
 
 (ns mckmeans.utils
-  (:use clojure.contrib.def clojure.contrib.duck-streams clojure.contrib.seq-utils)
+  (:use mckmeans.gui clojure.contrib.def clojure.contrib.duck-streams clojure.contrib.seq-utils)
   (:import (cern.jet.random.sampling RandomSamplingAssistant)
 	   (java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter PrintWriter);)
 
@@ -282,19 +282,19 @@
 
 
 
-;; (defn plot-sammon [dat]
-;;   (let [plot-data (DefaultXYDataset.)
-;; 	plot-area (. ChartFactory (createScatterPlot "" "x" "y" plot-data (. PlotOrientation VERTICAL) true false false))
-;; 	plot-panel (ChartPanel. plot-area)
-;; 	plot-frame (JFrame.)]
+(defn plot-sammon [dat]
+  (let [plot-data (DefaultXYDataset.)
+	plot-area (. ChartFactory (createScatterPlot "" "x" "y" plot-data (. PlotOrientation VERTICAL) true false false))
+	plot-panel (ChartPanel. plot-area)
+	plot-frame (JFrame.)]
 
-;;     (doall (map (fn [idx x] (doto plot-data (. addSeries (str idx) x))) (iterate inc 1) (data2plotdata dat 0 1)))
+    (doall (map (fn [idx x] (doto plot-data (. addSeries (str idx) x))) (iterate inc 1) (data2plotdata dat 0 1)))
 
-;;     (doto plot-frame
-;;       (. setSize 400 400)
-;;       (. setLayout (new BorderLayout))
-;;       (. add plot-panel (. BorderLayout CENTER))
-;;       (. pack)
-;;       (. setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)
-;;       (. setVisible true))))
+    (doto plot-frame
+      (. setSize 400 400)
+      (. setLayout (new BorderLayout))
+      (. add plot-panel (. BorderLayout CENTER))
+      (. pack)
+      (. setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)
+      (. setVisible true))))
 

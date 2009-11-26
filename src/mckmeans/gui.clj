@@ -515,7 +515,17 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	info-feature-text (JTextField. 7)
 	info-sample-label (JLabel. "Number of samples:")
 	info-feature-label (JLabel. "Number of features:")
-	info-swap-button (JButton. "Transpose data!")]
+	info-swap-button (JButton. "Transpose data!")
+
+	sammon-button (JButton. "Sammon's projection!")]
+
+(. sammon-button
+   (addActionListener
+    (proxy [ActionListener] []
+      (actionPerformed
+       [evt]
+       (let [res (sammon (if @*TRANSPOSED* @*TDATASET* @*DATASET*) 10 2)]
+	 (plot-sammon res))))))
 
     (. info-sample-text (setBackground Color/lightGray))
     (. info-feature-text (setBackground Color/lightGray))
@@ -551,6 +561,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	   (. boxplot-data (clear))))))
     (doto info-panel
       (. setLayout (FlowLayout. FlowLayout/RIGHT))
+(. add sammon-button)
       (. add info-swap-button)
       (. add info-sample-label)
       (. add info-sample-text)
