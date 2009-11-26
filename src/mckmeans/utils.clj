@@ -4,9 +4,26 @@
 ;;;;
 
 (ns mckmeans.utils
-  (:use clojure.contrib.def clojure.contrib.duck-streams)
+  (:use clojure.contrib.def clojure.contrib.duck-streams clojure.contrib.seq-utils)
   (:import (cern.jet.random.sampling RandomSamplingAssistant)
-	   (java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter PrintWriter))
+	   (java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter PrintWriter);)
+
+	   (javax.swing JFrame JLabel JButton JPanel JMenuBar JMenu JMenuItem JFileChooser JTextField JCheckBox JTextArea JScrollPane JTabbedPane JOptionPane SwingUtilities GroupLayout JEditorPane JList DefaultListModel)
+	   (javax.swing.filechooser FileFilter)
+	   (javax.swing.event HyperlinkListener)
+	   (java.awt.event ActionListener KeyListener)
+	   (java.awt FlowLayout GridLayout BorderLayout Color)
+	   (java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter)
+	   (org.jfree.data.xy DefaultXYDataset)
+	   (org.jfree.chart.axis CategoryAnchor AxisLocation NumberAxis)
+	   (org.jfree.data.statistics DefaultBoxAndWhiskerCategoryDataset)
+	   (org.jfree.data.category DefaultCategoryDataset)
+	   (org.jfree.chart ChartFactory JFreeChart ChartPanel)
+	   (org.jfree.chart.plot PlotOrientation CombinedDomainXYPlot)
+	   (org.apache.batik.dom GenericDOMImplementation)
+	   (org.apache.batik.svggen SVGGraphics2D)
+	   (org.w3c.dom DOMImplementation Document))
+
   (:gen-class))
 
 ;(import '(cern.jet.random.sampling RandomSamplingAssistant)
@@ -70,7 +87,7 @@
   (.. (str l) (replace "[" "") (replace "]" "") (replace " " sc)))
 
 (defn write-csv
-  [lines filename sc header csvparser]
+  [lines #^String filename sc header csvparser]
   (with-open [writer (PrintWriter. (BufferedWriter. (FileWriter. filename)))]
     (dorun (map #(.println writer (apply csvparser % (list sc))) lines))))
 
@@ -86,7 +103,7 @@
 
 (defnk save-txt
   [#^String filename #^String res :append false]
-  (with-open [out (BufferedWriter. (FileWriter. filename :append))]
+  (with-open [out (BufferedWriter. (FileWriter. filename (boolean :append)))]
     (.write out res)))
 
 (defn sample
@@ -125,7 +142,7 @@
 
 (defn da-snp-freq
   [#^ints as #^ints bs]
-  (let [mod 3]
+  (let [mod (int 3)]
     (areduce bs i ret (int 0)
 	     (* ret (int (aset-int as (+ (* i mod) (aget bs i)) (inc (aget as (+ (* i mod) (aget bs i)))))))))
   as)
@@ -149,14 +166,23 @@
 	(recur (conj res (+ (first res) s)))
 	(reverse (conj (drop 1 res) len))))))
 
+;; (defn pairwise-comb [n]
+;;   (let [n (dec (int n))]
+;;     (loop [start (int 0) counter (int 1) res nil]
+;;       (if (= start n)
+;; 	res
+;; 	(if (= counter n)
+;; 	  (recur (inc start) (inc (inc start)) (conj res (list start counter)))
+;; 	  (recur start (inc counter) (conj res (list start counter))))))))
+
 (defn pairwise-comb [n]
   (let [n (dec (int n))]
-    (loop [start (int 0) counter (int 1) res nil]
+    (loop [start (int 0) counter (int 1) res []]
       (if (= start n)
 	res
 	(if (= counter n)
-	  (recur (inc start) (inc (inc start)) (conj res (list start counter)))
-	  (recur start (inc counter) (conj res (list start counter))))))))
+	  (recur (inc start) (inc (inc start)) (conj res [start counter]))
+	  (recur start (inc counter) (conj res [start counter])))))))
 
 (defn transpose [dat snpmode]
   (let [nrow (int (count dat))
@@ -166,8 +192,109 @@
 	   tran (vec (replicate ncol '()))]
       (if (>= idx 0)
 	(let [curdat (dat idx)]
-	  (recur (dec idx) (vec (doall (map #(cons (aget curdat %) (tran %)) ilist)))))
+	  (recur (dec idx) (vec (doall (map #(cons (aget curdat (int %)) (tran (int %))) ilist)))))
 	(if-not snpmode
 	  (vec (doall (map #(double-array %) tran)))
 	  (vec (doall (map #(int-array %) tran))))))))
+
+(defmacro init-array [type init-fn & dims]
+  (let [idxs (map (fn [_] (gensym)) dims)
+        ds (map (fn [_] (gensym)) dims)]
+    `(let [a# (make-array ~type ~@dims)
+           f# ~init-fn
+           ~@(mapcat vector ds dims)]
+       (dorun 
+        (for ~(vec (mapcat #(list %1 (list `range %2)) idxs ds))
+          (aset a# ~@idxs (f# ~@idxs))))
+       a#)))
+
+(defmacro deep-aget
+  ([hint array idx]
+    `(aget ~(vary-meta array assoc :tag hint) ~idx))
+  ([hint array idx & idxs]
+    `(let [a# (aget ~(vary-meta array assoc :tag 'objects) ~idx)]
+       (deep-aget ~hint a# ~@idxs))))
+
+(defmacro deep-aset [hint array & idxsv]
+  (let [hints '{doubles double ints int} ; writing a comprehensive map is left as an exercise to the reader
+        [v idx & sxdi] (reverse idxsv)
+        idxs (reverse sxdi)
+        v (if-let [h (hints hint)] (list h v) v)
+        nested-array (if (seq idxs)
+                       `(deep-aget ~'objects ~array ~@idxs)
+                        array)
+        a-sym (with-meta (gensym "a") {:tag hint})]
+      `(let [~a-sym ~nested-array]
+         (aset ~a-sym ~idx ~v))))
+
+(defn sammon [dat maxiter dim]
+  (let [maxiter (int maxiter)
+	nrow (int (count dat))
+	proj (init-array Double/TYPE (fn [_ _] (rand) (rand)) nrow dim)] ; this hurts immutability!
+    (dotimes [iter maxiter]
+      (let [lambda (/ 1 (inc iter))]
+	(dotimes [i nrow]
+	    (dotimes [j nrow]
+	      (if (> j i)
+		(let [#^doubles dat0 (dat i)
+		      #^doubles proj0 (aget proj i)
+		      #^doubles proj1 (aget proj j)
+		      di (Math/sqrt (double (distance proj0 proj1)))
+		      #^doubles dat1 (dat j)
+		      dist (Math/sqrt (double (distance dat0 dat1)))
+		      delta (double (/ (* lambda (- dist di)) di))
+		      #^doubles newproj0 (amap proj0 idx ret
+					       (+ (aget proj0 idx) (* delta (- (aget proj0 idx) (aget proj1 idx)))))
+		      #^doubles newproj1 (amap proj1 idx ret
+					       (- (aget proj1 idx) (* delta (- (aget proj0 idx) (aget proj1 idx)))))]
+		  (aset proj i newproj0)
+		  (aset proj j newproj1)))))))
+    (vec proj)))
+
+;(defn sammon [dat maxiter dim]
+;  (let [nrow (count dat)
+;	combs (reverse (pairwise-comb nrow))
+;	dists (vec (doall (map (fn [x] (distance (nth dat (first x)) (nth dat (second x)))) combs)))
+;	proj (init-array Double/TYPE (fn [_ _] (rand) (rand)) nrow dim)] ; this hurts immutability!
+;    (loop [iter (int 1)
+;	   lambda 1]
+;      (if (< iter maxiter)
+;	(do (dorun (map (fn [x y] (let [proj0 (aget proj (first x))
+;					proj1 (aget proj (second x))
+;					di (distance proj0 proj1)
+;					delta (/ (* lambda (- y di)) di)
+;					newproj0 (amap proj0 idx ret
+;					   (+ (aget proj0 idx) (* delta (- (aget proj0 idx) (aget proj1 idx)))))
+;					newproj1 (amap proj0 idx ret
+;					   (- (aget proj1 idx) (* delta (- (aget proj0 idx) (aget proj1 idx)))))]
+;				    (aset proj (first x) newproj0)
+;				    (aset proj (second x) newproj1))) combs dists))
+;	    (recur (inc iter) (/ 1 iter)))
+;	(vec proj)))))
+;(println "comb: " x)
+;(println "proj0: " (vec proj0))
+;(println "proj1 " (vec proj1))
+;(println "di: " di)
+;(println "dist: " y)
+;(println "delta: " delta)
+;(println "newproj0: " (vec newproj0))
+;(println "newproj1: " (vec newproj1))
+
+
+
+;; (defn plot-sammon [dat]
+;;   (let [plot-data (DefaultXYDataset.)
+;; 	plot-area (. ChartFactory (createScatterPlot "" "x" "y" plot-data (. PlotOrientation VERTICAL) true false false))
+;; 	plot-panel (ChartPanel. plot-area)
+;; 	plot-frame (JFrame.)]
+
+;;     (doall (map (fn [idx x] (doto plot-data (. addSeries (str idx) x))) (iterate inc 1) (data2plotdata dat 0 1)))
+
+;;     (doto plot-frame
+;;       (. setSize 400 400)
+;;       (. setLayout (new BorderLayout))
+;;       (. add plot-panel (. BorderLayout CENTER))
+;;       (. pack)
+;;       (. setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)
+;;       (. setVisible true))))
 

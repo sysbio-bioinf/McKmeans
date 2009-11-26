@@ -8,7 +8,7 @@
      :doc "Multi-core kmeans cluster application"}
   (:use (mckmeans kmeans utils cne)
 	clojure.contrib.command-line)
-  (:import (javax.swing JFrame JLabel JButton JPanel JMenuBar JMenu JMenuItem JFileChooser JTextField JCheckBox JTextArea JScrollPane JTabbedPane JOptionPane SwingUtilities GroupLayout JEditorPane)
+  (:import (javax.swing JFrame JLabel JButton JPanel JMenuBar JMenu JMenuItem JFileChooser JTextField JCheckBox JTextArea JScrollPane JTabbedPane JOptionPane SwingUtilities GroupLayout JEditorPane JList DefaultListModel)
 	   (javax.swing.filechooser FileFilter)
 	   (javax.swing.event HyperlinkListener)
 	   (java.awt.event ActionListener KeyListener)
@@ -490,15 +490,11 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	numcluster-label (new JLabel " Number of clusters k:")
 	maxiter-text (new JTextField 7)
 	maxiter-label (new JLabel " Maximal number of iterations:")
-	result-label (new JLabel " Resulting cluster assignments:")
-	result-text (new JTextArea 10 1)
+
+	result-label (new JLabel " Number of samples per cluster:")
+	result-list (DefaultListModel.)
+	result-text (JList. result-list)
 	result-scrollpane (JScrollPane. result-text)
-;	dim-label (new JLabel " Select features to plot:")
-;	dimx-label (new JLabel " dim x:")
-;	dimy-label (new JLabel " dim y:")
-;	dimx-text (new JTextField)
-;	dimy-text (new JTextField)
-;	parameter-label (new JLabel "Change k-means parameters:")
 
 ;	estimate-label (new JLabel " Change cluster number estimation parameters:")
 	estimate-k-label (new JLabel " Maximal number of clusters k:")
@@ -523,7 +519,6 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 
     (. info-sample-text (setBackground Color/lightGray))
     (. info-feature-text (setBackground Color/lightGray))
-
     (. info-swap-button
       (addActionListener
 	(proxy [ActionListener] []
@@ -554,7 +549,6 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 
 	   ; remove boxplots
 	   (. boxplot-data (clear))))))
-
     (doto info-panel
       (. setLayout (FlowLayout. FlowLayout/RIGHT))
       (. add info-swap-button)
@@ -567,7 +561,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
     (. file-chooser
        (addChoosableFileFilter
 	(proxy [FileFilter] []
-	  (getDescription [] "TAB and SNP files")
+	  (getDescription [] "CSV and SNP files")
 	  (accept
 	   [f]
 	   (if (. f (isDirectory))
@@ -600,8 +594,6 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
     (. kmodes-combined-chart (removeLegend))
 
     (. plot-panel (setPopupMenu nil))
-
-    (. result-text (setLineWrap true))
     
     (. statusbar (setForeground (. Color red)))
 ;    (. run-button (setBackground (. Color red)))
@@ -732,12 +724,6 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
       (. add estimation-panel)
       (. add estimation-button-panel))
 
-    (doto result-panel
-      (. setLayout (new BorderLayout))
-      ;(. add result-label (. BorderLayout NORTH))
-      ;(. add result-scrollpane (. BorderLayout CENTER))
-      (. add statusbar (. BorderLayout SOUTH)))
-
     (. menu-file-load
        (addActionListener
 	(proxy [ActionListener] []
@@ -776,58 +762,61 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 		    (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (data2plotdata (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*DIMX* @*DIMY*)))))
 
 	      (. boxplot-data (clear)) 
-	      (. result-text (setText ""))
+;	      (. result-text (setText ""))
 	      (. statusbar
 		 (setText " file loaded")))
-	    (catch Exception e (JOptionPane/showMessageDialog nil "Error while loading file. See 'Help - File format'\nfor information about supported formats." "Error" JOptionPane/ERROR_MESSAGE)))))))
+	    (catch Exception e (JOptionPane/showMessageDialog nil (str e) "Error" JOptionPane/ERROR_MESSAGE)))))))
+;	    (catch Exception e (JOptionPane/showMessageDialog nil "Error while loading file. See 'Help - File format'\nfor information about supported formats." "Error" JOptionPane/ERROR_MESSAGE)))))))
 
-		(. menu-file-save
-		   (addActionListener
-		    (proxy [ActionListener] []
-		      (actionPerformed [evt]
-				       (try
-					(let [ret (. file-chooser (showSaveDialog frame))
-					      filename (. (. file-chooser (getSelectedFile)) (getPath))
+    (. menu-file-save
+       (addActionListener
+	(proxy [ActionListener] []
+	  (actionPerformed 
+	   [evt]
+	   (try
+	    (let [ret (. file-chooser (showSaveDialog frame))
+		  filename (. (. file-chooser (getSelectedFile)) (getPath))
 ;					      restext (.. (pr-str (:cluster @*RESULT*)) (replace "(" "") (replace ")" ""))]
-					      res (:cluster @*RESULT*)]
+		  res (:cluster @*RESULT*)]
 ;					  (save-result filename restext)
-					  (write-csv res filename "," false list-parse-csv)
-					  (. statusbar
-					     (setText " result saved")))
-					(catch Exception e (. statusbar (setText " error while saving file"))))
-				       ))))
+	      (write-csv res filename "," false list-parse-csv)
+	      (. statusbar (setText " result saved")))
+	    (catch Exception e (. statusbar (setText " error while saving file"))))))))
 
-		(. menu-export-svg
-		   (addActionListener
-		    (proxy [ActionListener] []
-		      (actionPerformed [evt]
-				       (try
-					(let [which-chart (. tabbed-pane (getSelectedIndex))
-					      ret (. file-chooser (showSaveDialog frame))
-					      filename (. (. file-chooser (getSelectedFile)) (getPath))]
-					  (if (== which-chart 0)
-					    (exportChart2SVG plot-area frame filename)
-					    (exportChart2SVG boxplot-chart frame filename)))
-					(catch Exception e nil))))))
+    (. menu-export-svg
+       (addActionListener
+	(proxy [ActionListener] []
+	  (actionPerformed 
+	   [evt]
+	   (try
+	    (let [which-chart (. tabbed-pane (getSelectedIndex))
+		  ret (. file-chooser (showSaveDialog frame))
+		  filename (. (. file-chooser (getSelectedFile)) (getPath))]
+	      (if (== which-chart 0)
+		(exportChart2SVG plot-area frame filename)
+		(exportChart2SVG boxplot-chart frame filename)))
+	    (catch Exception e nil))))))
 
-		(. menu-preferences
-		  (addActionListener
-		   (proxy [ActionListener] []
-			  (actionPerformed [evt]
-					   (show-preferences-panel)))))
+    (. menu-preferences
+       (addActionListener
+	(proxy [ActionListener] []
+	  (actionPerformed 
+	   [evt]
+	   (show-preferences-panel)))))
 		
-		(. menu-exit
-		  (addActionListener
-		   (proxy [ActionListener] []
-			  (actionPerformed [evt]
-					   (System/exit 0)))))		
+    (. menu-exit
+       (addActionListener
+	(proxy [ActionListener] []
+	  (actionPerformed 
+	   [evt]
+	   (System/exit 0)))))		
 				
-		(doto menu-file
-		  (. add menu-file-load)
-		  (. add menu-file-save)
-		  (. add menu-export-svg)
-		  (. add menu-preferences)
-		  (. add menu-exit))
+    (doto menu-file
+      (. add menu-file-load)
+      (. add menu-file-save)
+      (. add menu-export-svg)
+      (. add menu-preferences)
+      (. add menu-exit))
 
 ;		(. menu-options-clusters
 ;		  (addActionListener
@@ -869,12 +858,26 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 ;; 		  (. add (JLabel. ""))
 ;; 		  (. add (JLabel. ""))
 ;; 		  (. add run-button))
+
+;    (. result-text (setEditable false))
+;    (. result-text (setLineWrap true))
+;    (doto result-panel
+;      (. setLayout (new BorderLayout))
+      ;(. add result-label (. BorderLayout NORTH))
+;      (. add result-scrollpane (. BorderLayout CENTER)))
+;      (. add statusbar (. BorderLayout SOUTH)))
+(. result-list addElement (str "Cluster 0: "))
+(doto result-text
+  (. setLayoutOrientation JList/VERTICAL)
+  (. setVisibleRowCount 1)
+  (. setSelectedIndex 0))
 		
 		(let [layout (GroupLayout. kmeans-options-panel)
 		      parGrouplabelh (. layout (createParallelGroup))
 		      parGrouptexth (. layout (createParallelGroup))
 		      parGrouplabelv (. layout (createParallelGroup))
 		      parGrouptextv (. layout (createParallelGroup))
+;		      parGroupresulth (. layout (createParallelGroup))
 		      seqGrouph (. layout (createSequentialGroup))
 		      seqGroupv (. layout (createSequentialGroup))]
 		  (. layout setAutoCreateGaps true)
@@ -889,16 +892,23 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
 		    (. addComponent run-button
 		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
+;		  (doto parGroupresulth
+;		    (. addComponent result-label)
+;		    (. addComponent result-text
+;		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
 		  (doto seqGrouph
 		    (. addGroup parGrouplabelh)
 		    (. addGroup parGrouptexth))
-		  (. layout setHorizontalGroup seqGrouph)		  
+;		    (. addGroup parGroupresulth))
+		  (. layout setHorizontalGroup seqGrouph)
 		  (doto parGrouplabelv
 		    (. addComponent numcluster-label)
 		    (. addComponent numcluster-text))
+;		    (. addComponent result-label))
 		  (doto parGrouptextv
 		    (. addComponent maxiter-label)
 		    (. addComponent maxiter-text))
+;		    (. addComponent result-text))
 		  (doto seqGroupv
 		    (. addGroup parGrouplabelv)
 		    (. addGroup parGrouptextv)

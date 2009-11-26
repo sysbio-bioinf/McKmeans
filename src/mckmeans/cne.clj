@@ -54,8 +54,9 @@
   "Do jackknife resampling nrun times for all k in ks"
   [dat nrun ks maxiter snpmode]
   (let [size (int (count dat))
-	leaveout (. Math (ceil (. Math (sqrt size))))]
-    (vec (reverse (doall (pmap #(jackknife-kmeans dat nrun % maxiter leaveout snpmode) ks))))))
+	leaveout (min (. Math (ceil (. Math (sqrt size)))) (- size (apply max ks)))]
+;    (vec (reverse (doall (pmap #(jackknife-kmeans dat nrun % maxiter leaveout snpmode) ks))))))
+    (vec (doall (pmap #(jackknife-kmeans dat nrun % maxiter leaveout snpmode) ks)))))
 
 ;(defn kloop-jackknife-kmeans
 ;  "Do jackknife resampling nrun times for all k in ks"
@@ -70,11 +71,13 @@
   ""
   [dat nrun ks snpmode]
   (let [size (count dat)]
-    (vec (reverse (doall (pmap (fn [x]
+;    (vec (reverse (doall (pmap (fn [x]
+    (vec (doall (pmap (fn [x]
 				 (vec (doall (pmap (fn [_] 
 						     (let [centers (map #(nth dat %) (sample size x))]
 						       (predict-assignment dat centers snpmode)))
-						   (range nrun))))) ks))))))
+;						   (range nrun))))) ks))))))
+						   (range nrun))))) ks)))))
 
 ;(defn calculate-baselines
 ;  ""
@@ -89,16 +92,16 @@
 ;					   (let [centers (map #(nth dat %) (sample size (first klist)))]
 ;					     (recur (inc run) (conj res (predict-assignment dat centers))))))))))))
 
-(defmacro init-array [type init-fn & dims]
-  (let [idxs (map (fn [_] (gensym)) dims)
-        ds (map (fn [_] (gensym)) dims)]
-    `(let [a# (make-array ~type ~@dims)
-           f# ~init-fn
-           ~@(mapcat vector ds dims)]
-       (dorun 
-        (for ~(vec (mapcat #(list %1 (list `range %2)) idxs ds))
-          (aset a# ~@idxs (f# ~@idxs))))
-       a#)))
+;(defmacro init-array [type init-fn & dims]
+;  (let [idxs (map (fn [_] (gensym)) dims)
+;        ds (map (fn [_] (gensym)) dims)]
+;    `(let [a# (make-array ~type ~@dims)
+;           f# ~init-fn
+;           ~@(mapcat vector ds dims)]
+;       (dorun 
+;        (for ~(vec (mapcat #(list %1 (list `range %2)) idxs ds))
+;          (aset a# ~@idxs (f# ~@idxs))))
+;       a#)))
 
 ;(init-array Float/TYPE (fn [x y] 5 5) 3 3)
 
