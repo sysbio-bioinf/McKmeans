@@ -143,11 +143,11 @@
                <body>
                <h1>Basic usage</h1>
                <h2>Load data</h2>
-               First load a gene expression or SNP data set via 'File -> Load'. The required input file format is described <a href=\"help-load\">here</a>. In case of gene expression data, the first two features of the data set are displayed as a scatterplot in the plotting region. The features to plot can be changed in the preferences menu 'File -> Preferences'. SNP data is displayed as a parallel coordinate plot. Information about the number samples and features is displayed on the bottom right. After loading the input data can be transposed to switch between clustering samples and features by pressing the 'Transpose!' button
+               First load a gene expression or SNP data set via 'File -> Load'. The required input file format is described <a href=\"help-load\">here</a>. Information about the number of rows and colums is displayed on the bottom right. The data is always clustered row-wise. The input data can be transposed to switch rows and columns by pressing the 'Transpose data set!' button. In case of gene expression data, the first two columns of the data set are displayed in a scatterplot in the plotting region. The columns to plot can be changed in the preferences menu 'File -> Preferences'. SNP data is displayed as a parallel coordinate plot.
                <h2>Cluster analysis</h2>
-Choose the number of clusters and the maximal number of iterations for the K-means algorithm. The clustering starts by clicking on the 'Cluster!' button. The cluster analysis may take a while, e.g. 25 minutes for clustering a data set containing 1000000 samples with 100 features into 20 clusters on a dual-quad core computer. The resulting clustering is displayed in the plotting area. Additionally, the assignment vector can be saved via 'File -> Save'.
+Choose the number of clusters and the maximal number of iterations for the K-means algorithm. The clustering starts by clicking on the 'Cluster!' button. The cluster analysis may take a while, e.g. 25 minutes for clustering a data set containing 1000000 rows with 100 columns into 20 clusters on a dual-quad core computer. The resulting clustering is displayed in the plotting area. Additionally, the assignment vector can be saved via 'File -> Save'.
                <h2>Cluster number estimation</h2>
-               Switch to the cluster number estimation panel by choosing the second tab in the main window. Choose the maximal number of clusters, the maximal number of iterations per clustering, and the maximal number of runs per clustering. Press 'Cluster number estimation' to start the process. Depending on the data size, this may take several hours. The result is displayed in the boxplot area. Red boxes show the MCA-index from evaluating cluster results. Blue boxes show a random baseline for the MCA-index. The best number of clusters is reported for the number k with the largest difference between mean MCA-index from clustering and mean MCA-index from baseline evalution. It is also displayed on the cluster analysis tab.
+               Switch to the cluster number estimation panel by choosing the second tab in the main window. Choose the maximal number of clusters, the maximal number of iterations per clustering, and the maximal number of runs per clustering. Press 'Cluster number estimation' to start the process. Depending on data size, this may take several hours. The result is displayed in the boxplot area. Red boxes show the MCA-index from evaluating cluster results. Blue boxes show a random baseline for the MCA-index. The best number of clusters is reported for the number k with the largest difference between mean MCA-index from clustering and mean MCA-index from baseline evalution. It is also displayed on the cluster analysis tab.
                </body>
                </html>"
 	help-load "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2//EN\"
@@ -158,7 +158,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
                </head>
                <body>
                <h1>Input file format</h1>
-               Input is required to be in CSV file format. Each row is a data point, each column is a feature. Columns are separated by ','. The file must not include a header line. SNP data has to be encoded as '0,1,2' for 'homozygotous reference, heterozygotous, homozygotous alternative'. For clustering snp files, the suffix has to be changed to '.snp'.
+               Input is required to be in CSV file format. The data is clustered by rows, but it can be transposed after loading for also clustering columns. Columns are separated by ','. The file must not include a header line. SNP data has to be encoded as '0,1,2' for 'homozygotous reference, heterozygotous, homozygotous alternative'. For clustering snp files, the suffix has to be changed to '.snp'.
                </body>
                </html>"
 	editor-panel (JEditorPane. "text/html" help-index)
@@ -208,7 +208,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
   []
     (let [options-panel (JPanel.)
 	options-frame (JFrame. "Preferences")
-	dim-label (new JLabel " Select features to plot:")
+	dim-label (new JLabel " Select columns to plot:")
 	dimx-label (new JLabel " dim x:")
 	dimy-label (new JLabel " dim y:")
 	dimx-text (new JTextField)
@@ -264,7 +264,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
   []
   (let [options-panel (JPanel.)
 	options-frame (JFrame. "Options")
-	dim-label (new JLabel " Select features to plot:")
+	dim-label (new JLabel " Select columns to plot:")
 	dimx-label (new JLabel " dim x:")
 	dimy-label (new JLabel " dim y:")
 	dimx-text (new JTextField)
@@ -491,9 +491,10 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	maxiter-text (new JTextField 7)
 	maxiter-label (new JLabel " Maximal number of iterations:")
 
-	result-label (new JLabel " Number of samples per cluster:")
-	result-list (DefaultListModel.)
-	result-text (JList. result-list)
+	result-label (new JLabel " Number of elements per cluster:")
+;	result-list (DefaultListModel.)
+;	result-text (JList. result-list)
+	result-text (JTextArea. 2 15)
 	result-scrollpane (JScrollPane. result-text)
 
 ;	estimate-label (new JLabel " Change cluster number estimation parameters:")
@@ -508,7 +509,9 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	result-panel (new JPanel)
 
 	statusbar (new JLabel " Welcome to the McKmeans cluster application ...")
-	file-chooser (new JFileChooser)
+	file-chooser (JFileChooser.)
+	file-chooser-csv (JFileChooser.)
+	file-chooser-svg (JFileChooser.)
 	
 	info-panel (JPanel.)
 	info-sample-text (JTextField. 7)
@@ -584,7 +587,39 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 		       (. extension equalsIgnoreCase "snp"))
 		 true
 		 false)))))))
-    
+ 
+    (. file-chooser-csv (setAcceptAllFileFilterUsed false))
+    (. file-chooser-csv
+       (addChoosableFileFilter
+	(proxy [FileFilter] []
+	  (getDescription [] "CSV files")
+	  (accept
+	   [f]
+	   (if (. f (isDirectory))
+	     true
+	     (let [fname (. f getName)
+		   idx (inc (. fname (lastIndexOf ".")))
+		   extension (. fname (substring idx))]
+	       (if (. extension equalsIgnoreCase "csv")
+		 true
+		 false)))))))
+ 
+    (. file-chooser-svg (setAcceptAllFileFilterUsed false))
+    (. file-chooser-svg
+       (addChoosableFileFilter
+	(proxy [FileFilter] []
+	  (getDescription [] "SVG files")
+	  (accept
+	   [f]
+	   (if (. f (isDirectory))
+	     true
+	     (let [fname (. f getName)
+		   idx (inc (. fname (lastIndexOf ".")))
+		   extension (. fname (substring idx))]
+	       (if (. extension equalsIgnoreCase "svg")
+		 true
+		 false)))))))
+ 
     (.. boxplot-chart getCategoryPlot getRenderer (setMaximumBarWidth 0.25))
     (.. boxplot-chart getCategoryPlot getRenderer (setFillBox true))
     (.. boxplot-chart getCategoryPlot getRenderer (setMeanVisible false))
@@ -776,8 +811,8 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 ;	      (. result-text (setText ""))
 	      (. statusbar
 		 (setText " file loaded")))
-	    (catch Exception e (JOptionPane/showMessageDialog nil (str e) "Error" JOptionPane/ERROR_MESSAGE)))))))
-;	    (catch Exception e (JOptionPane/showMessageDialog nil "Error while loading file. See 'Help - File format'\nfor information about supported formats." "Error" JOptionPane/ERROR_MESSAGE)))))))
+;	    (catch Exception e (JOptionPane/showMessageDialog nil (str e) "Error" JOptionPane/ERROR_MESSAGE)))))))
+	    (catch Exception e (JOptionPane/showMessageDialog nil "Error while loading file. See 'Help - File format'\nfor information about supported formats." "Error" JOptionPane/ERROR_MESSAGE)))))))
 
     (. menu-file-save
        (addActionListener
@@ -785,8 +820,8 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	  (actionPerformed 
 	   [evt]
 	   (try
-	    (let [ret (. file-chooser (showSaveDialog frame))
-		  filename (. (. file-chooser (getSelectedFile)) (getPath))
+	    (let [ret (. file-chooser-csv (showSaveDialog frame))
+		  filename (. (. file-chooser-csv (getSelectedFile)) (getPath))
 ;					      restext (.. (pr-str (:cluster @*RESULT*)) (replace "(" "") (replace ")" ""))]
 		  res (:cluster @*RESULT*)]
 ;					  (save-result filename restext)
@@ -801,8 +836,8 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	   [evt]
 	   (try
 	    (let [which-chart (. tabbed-pane (getSelectedIndex))
-		  ret (. file-chooser (showSaveDialog frame))
-		  filename (. (. file-chooser (getSelectedFile)) (getPath))]
+		  ret (. file-chooser-svg (showSaveDialog frame))
+		  filename (. (. file-chooser-svg (getSelectedFile)) (getPath))]
 	      (if (== which-chart 0)
 		(exportChart2SVG plot-area frame filename)
 		(exportChart2SVG boxplot-chart frame filename)))
@@ -877,18 +912,20 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
       ;(. add result-label (. BorderLayout NORTH))
 ;      (. add result-scrollpane (. BorderLayout CENTER)))
 ;      (. add statusbar (. BorderLayout SOUTH)))
-(. result-list addElement (str "Cluster 0: "))
-(doto result-text
-  (. setLayoutOrientation JList/VERTICAL)
-  (. setVisibleRowCount 1)
-  (. setSelectedIndex 0))
+;(. result-list addElement (str "Cluster 0: "))
+(. result-text (setEditable false))
+(. result-text (setLineWrap true))
+(. result-text (setText "Cluster 0: \nCluster 1: \nCluster 2: \nCluster 3: \n"))
+;(doto result-text
+;  (. setLayoutOrientation JList/VERTICAL)
+;  (. setVisibleRowCount 1)
+;  (. setSelectedIndex 0))
 		
 		(let [layout (GroupLayout. kmeans-options-panel)
 		      parGrouplabelh (. layout (createParallelGroup))
 		      parGrouptexth (. layout (createParallelGroup))
 		      parGrouplabelv (. layout (createParallelGroup))
 		      parGrouptextv (. layout (createParallelGroup))
-;		      parGroupresulth (. layout (createParallelGroup))
 		      seqGrouph (. layout (createSequentialGroup))
 		      seqGroupv (. layout (createSequentialGroup))]
 		  (. layout setAutoCreateGaps true)
@@ -903,27 +940,29 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
 		    (. addComponent run-button
 		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
-;		  (doto parGroupresulth
-;		    (. addComponent result-label)
-;		    (. addComponent result-text
-;		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
 		  (doto seqGrouph
 		    (. addGroup parGrouplabelh)
-		    (. addGroup parGrouptexth))
-;		    (. addGroup parGroupresulth))
+		    (. addGroup parGrouptexth)
+		    (. addComponent result-label)
+		    (. addComponent result-scrollpane
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
 		  (. layout setHorizontalGroup seqGrouph)
 		  (doto parGrouplabelv
 		    (. addComponent numcluster-label)
-		    (. addComponent numcluster-text))
-;		    (. addComponent result-label))
+		    (. addComponent numcluster-text
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
+		    (. addComponent result-label)
+		    (. addComponent result-scrollpane
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
 		  (doto parGrouptextv
 		    (. addComponent maxiter-label)
-		    (. addComponent maxiter-text))
-;		    (. addComponent result-text))
-		  (doto seqGroupv
-		    (. addGroup parGrouplabelv)
-		    (. addGroup parGrouptextv)
-		    (. addComponent run-button))
+		    (. addComponent maxiter-text
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
+ 		  (doto seqGroupv
+ 		    (. addGroup parGrouplabelv)
+ 		    (. addGroup parGrouptextv)
+ 		    (. addComponent run-button))
+
 		  (. layout setVerticalGroup seqGroupv)
 		  (. kmeans-options-panel setLayout layout))
 
