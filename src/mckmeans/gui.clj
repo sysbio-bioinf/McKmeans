@@ -492,8 +492,9 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	maxiter-label (new JLabel " Maximal number of iterations:")
 
 	result-label (new JLabel " Number of elements per cluster:")
-	result-list (DefaultListModel.)
-	result-text (JList. result-list)
+;	result-list (DefaultListModel.)
+;	result-text (JList. result-list)
+	result-text (JTextArea. 2 15)
 	result-scrollpane (JScrollPane. result-text)
 
 ;	estimate-label (new JLabel " Change cluster number estimation parameters:")
@@ -900,18 +901,20 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
       ;(. add result-label (. BorderLayout NORTH))
 ;      (. add result-scrollpane (. BorderLayout CENTER)))
 ;      (. add statusbar (. BorderLayout SOUTH)))
-(. result-list addElement (str "Cluster 0: "))
-(doto result-text
-  (. setLayoutOrientation JList/VERTICAL)
-  (. setVisibleRowCount 1)
-  (. setSelectedIndex 0))
+;(. result-list addElement (str "Cluster 0: "))
+(. result-text (setEditable false))
+(. result-text (setLineWrap true))
+(. result-text (setText "Cluster 0: \nCluster 1: \nCluster 2: \nCluster 3: \n"))
+;(doto result-text
+;  (. setLayoutOrientation JList/VERTICAL)
+;  (. setVisibleRowCount 1)
+;  (. setSelectedIndex 0))
 		
 		(let [layout (GroupLayout. kmeans-options-panel)
 		      parGrouplabelh (. layout (createParallelGroup))
 		      parGrouptexth (. layout (createParallelGroup))
 		      parGrouplabelv (. layout (createParallelGroup))
 		      parGrouptextv (. layout (createParallelGroup))
-;		      parGroupresulth (. layout (createParallelGroup))
 		      seqGrouph (. layout (createSequentialGroup))
 		      seqGroupv (. layout (createSequentialGroup))]
 		  (. layout setAutoCreateGaps true)
@@ -926,27 +929,29 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
 		    (. addComponent run-button
 		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
-;		  (doto parGroupresulth
-;		    (. addComponent result-label)
-;		    (. addComponent result-text
-;		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
 		  (doto seqGrouph
 		    (. addGroup parGrouplabelh)
-		    (. addGroup parGrouptexth))
-;		    (. addGroup parGroupresulth))
+		    (. addGroup parGrouptexth)
+		    (. addComponent result-label)
+		    (. addComponent result-scrollpane
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
 		  (. layout setHorizontalGroup seqGrouph)
 		  (doto parGrouplabelv
 		    (. addComponent numcluster-label)
-		    (. addComponent numcluster-text))
-;		    (. addComponent result-label))
+		    (. addComponent numcluster-text
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
+		    (. addComponent result-label)
+		    (. addComponent result-scrollpane
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
 		  (doto parGrouptextv
 		    (. addComponent maxiter-label)
-		    (. addComponent maxiter-text))
-;		    (. addComponent result-text))
-		  (doto seqGroupv
-		    (. addGroup parGrouplabelv)
-		    (. addGroup parGrouptextv)
-		    (. addComponent run-button))
+		    (. addComponent maxiter-text
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
+ 		  (doto seqGroupv
+ 		    (. addGroup parGrouplabelv)
+ 		    (. addGroup parGrouptextv)
+ 		    (. addComponent run-button))
+
 		  (. layout setVerticalGroup seqGroupv)
 		  (. kmeans-options-panel setLayout layout))
 
