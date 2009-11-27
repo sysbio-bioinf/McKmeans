@@ -564,7 +564,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	   [evt]
 
 (let [job-frame (JFrame. "Job running")
-      job-text (JTextField. "Running cluster analysis. This may take a while ..." 100)
+      job-text (JTextField. "Running cluster analysis. This may take a while ...")
       job-runner (JProgressBar.)
       job-cancel (JButton. "Cancel")
       job-panel (JPanel.)]
@@ -582,7 +582,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
     (. add job-cancel))
   (doto job-frame
     (. setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)
-    (. setSize 10 100)
+;    (. setSize 10 100)
     (. setLayout (BorderLayout.))
     (. add job-text BorderLayout/NORTH)
     (. add job-panel BorderLayout/CENTER)
@@ -728,7 +728,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	   [evt]
 
 (let [job-frame (JFrame. "Job running")
-      job-text (JTextField. "Running cluster analysis. This may take a while ..." 100)
+      job-text (JTextField. "Running cluster analysis. This may take a while ...")
       job-runner (JProgressBar.)
       job-cancel (JButton. "Cancel")
       job-panel (JPanel.)]
@@ -746,7 +746,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
     (. add job-cancel))
   (doto job-frame
     (. setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)
-    (. setSize 10 100)
+;    (. setSize 10 100)
     (. setLayout (BorderLayout.))
     (. add job-text BorderLayout/NORTH)
     (. add job-panel BorderLayout/CENTER)
@@ -801,36 +801,19 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	(proxy [ActionListener] []
 	  (actionPerformed
 	   [evt]
-
-(let [job-frame (JFrame. "Job running")
-      job-text (JTextField. "Running cluster number estimation. This may take a while ..." 100)
+(. estimate-button (setEnabled false))
+(let [backgroundExec (java.util.concurrent.Executors/newCachedThreadPool)
+      job-frame (JFrame. "Job running")
+      job-text (JTextField. "Running cluster number estimation. This may take a while ...")
       job-runner (JProgressBar.)
       job-cancel (JButton. "Cancel")
-      job-panel (JPanel.)]
-  (. job-text (setEditable false))
-  (. job-runner (setIndeterminate true))
-  (. job-cancel
-    (addActionListener
-     (proxy [ActionListener] []
-       (actionPerformed 
-	[evt]
-	(. job-frame (dispose))))))
-  (doto job-panel
-    (. setLayout (FlowLayout.))
-    (. add job-runner)
-    (. add job-cancel))
-  (doto job-frame
-    (. setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)
-    (. setSize 10 100)
-    (. setLayout (BorderLayout.))
-    (. add job-text BorderLayout/NORTH)
-    (. add job-panel BorderLayout/CENTER)
-    (. pack)
-    (. setVisible true))
+      job-panel (JPanel.)
 
 
-(. estimate-button (setEnabled false))
-(. (java.util.concurrent.Executors/newCachedThreadPool) (execute (fn [] 
+
+running-task (. backgroundExec (submit #^Runnable (fn []
+	   
+	   
 
 
 	   (. statusbar (setText " running cluster number estimation ... this will take some time ..."))
@@ -878,11 +861,35 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	       (do
 		 (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
 		 (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (make-plotdata (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*DIMX* @*DIMY* @*RESULT*))))))
-
 (. estimate-button (setEnabled true))
 (. job-frame (dispose))
-	   ))))
-))))
+)))]
+
+  (. job-text (setEditable false))
+  (. job-runner (setIndeterminate true))
+  (. job-cancel
+    (addActionListener
+     (proxy [ActionListener] []
+       (actionPerformed 
+	[evt]
+        (. running-task (cancel true))
+        (. estimate-button (setEnabled true))
+	(. job-frame (dispose))))))
+  (doto job-panel
+    (. setLayout (FlowLayout.))
+    (. add job-runner)
+    (. add job-cancel))
+  (doto job-frame
+    (. setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)
+;    (. setSize 10 100)
+    (. setLayout (BorderLayout.))
+    (. add job-text BorderLayout/NORTH)
+    (. add job-panel BorderLayout/CENTER)
+    (. pack)
+    (. setVisible true))
+
+
+	   )))))
 
 
 
