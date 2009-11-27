@@ -145,7 +145,7 @@
                <title>McKmeans Help</title>
                </head>
                <body>
-               <h1>McKmeans: A highly efficient multi-core k-means algorithm\nfor clustering extremely large datasets.</h1>
+               <h1>McKmeans: A highly efficient multi-core k-means algorithm<br>for clustering extremely large datasets.</h1>
                <ul>
                <li><a href=\"help-usage\">Basic usage</a></li>
                <li><a href=\"help-load\">Input file format</a></li>
@@ -162,10 +162,10 @@
                </head>
                <body>
                <h1>Basic usage</h1>
-               <h2>Load data</h2>
-               First load a gene expression or SNP data set via 'File -> Load'. The required input file format is described <a href=\"help-load\">here</a>. Information about the number of rows and colums is displayed on the bottom right. The data is always clustered row-wise. The input data can be transposed to switch rows and columns by pressing the 'Transpose data set!' button. In case of gene expression data, the first two columns of the data set are displayed in a scatterplot in the plotting region. The columns to plot can be changed in the preferences menu 'File -> Preferences'. Alternatively, the data can be plotted as a 2-dimensional non-linear projection, see <a href=\"help-sammon\">Sammon's projection</a> for details. SNP data is displayed as a parallel coordinate plot.
+               <h2>Load data, transpose data</h2>
+               First load a gene expression or SNP data set via 'File -> Load'. The required input file format is described <a href=\"help-load\">here</a>. Information about the number of rows and colums is displayed on the bottom right. The data is always clustered row-wise. The input data can be transposed to switch rows and columns by pressing the 'Transpose data set!' button. In case of gene expression data, the first two columns of the data set are displayed as a scatterplot in the plotting region. The columns to plot can be changed in the preferences menu 'File -> Preferences'. Alternatively, the data can be plotted as a 2-dimensional non-linear projection, see <a href=\"help-sammon\">Sammon's projection</a> for details. SNP data is displayed as a parallel coordinate plot.
                <h2>Cluster analysis</h2>
-Choose the number of clusters and the maximal number of iterations for the K-means algorithm. The clustering starts by clicking on the 'Cluster!' button. The cluster analysis may take a while, e.g. 25 minutes for clustering a data set containing 1000000 rows with 100 columns into 20 clusters on a dual-quad core computer. The resulting clustering is displayed in the plotting area. Additionally, the assignment vector can be saved via 'File -> Save'.
+Choose the number of clusters and the maximal number of iterations for the K-means algorithm. Clustering of SNP data uses a slightly different method for calculating distances, see <a href=\"online-help\">the online help</a> for more details. The clustering starts by clicking on the 'Cluster!' button. The cluster analysis may take a while, e.g. 25 minutes for clustering a data set containing 1000000 rows with 100 columns into 20 clusters on a dual-quad core computer. The resulting clustering is displayed in the plotting area. Additionally, the assignment vector can be saved via 'File -> Save'.
                <h2>Cluster number estimation</h2>
                Switch to the cluster number estimation panel by choosing the second tab in the main window. Choose the maximal number of clusters, the maximal number of iterations per clustering, and the maximal number of runs per clustering. Press 'Cluster number estimation' to start the process. Depending on data size, this may take several hours. The result is displayed in the boxplot area. Red boxes show the MCA-index from evaluating cluster results. Blue boxes show a random baseline for the MCA-index. The best number of clusters is reported for the number k with the largest difference between mean MCA-index from clustering and mean MCA-index from baseline evalution. It is also displayed on the cluster analysis tab.
                </body>
@@ -421,7 +421,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	(.. chart getCategoryPlot (setDomainGridlinePosition CategoryAnchor/MIDDLE))
 	(.. chart getCategoryPlot (setDomainGridlinesVisible true))
 ;	(.. chart getCategoryPlot (setAnchorValue 1.5))
-	(dorun (map #(.add dat %1 %2 %3) results (replicate len "McKmeans result") (iterate inc 2)))
+	(dorun (map #(.add dat %1 %2 %3) results (replicate len "McKmeans") (iterate inc 2)))
 	(dorun (map #(.add dat %1 %2 %3) baselines (replicate len "Random prototype baseline") (iterate inc 2)))
 
 
@@ -533,7 +533,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	result-scrollpane (JScrollPane. result-text)
 
 ;	estimate-label (new JLabel " Change cluster number estimation parameters:")
-	estimate-k-label (new JLabel " Maximal number of clusters k:")
+	estimate-k-label (JLabel. " Maximal number of clusters k:")
 	estimate-run-label (new JLabel " Number of resamplings per cluster:")
 	estimate-k-text (new JTextField 7)
 	estimate-run-text (new JTextField 7)
@@ -555,16 +555,17 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	info-feature-label (JLabel. "Number of columns:")
 	info-swap-button (JButton. "Transpose data!")
 
-	sammon-button (JButton. "Sammon's projection!")]
+	sammon-button (JButton. "Sammon mapping!")]
 
     (. sammon-button
        (addActionListener
 	(proxy [ActionListener] []
 	  (actionPerformed
 	   [evt]
+	   (. tabbed-pane (setSelectedIndex 0))
 
 (let [job-frame (JFrame. "Job running")
-      job-text (JTextField. "Running cluster analysis. This may take a while ...")
+      job-text (JTextField. "Running Sammon mapping...")
       job-runner (JProgressBar.)
       job-cancel (JButton. "Cancel")
       job-panel (JPanel.)]
@@ -728,7 +729,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	   [evt]
 
 (let [job-frame (JFrame. "Job running")
-      job-text (JTextField. "Running cluster analysis. This may take a while ...")
+      job-text (JTextField. "Running cluster analysis..")
       job-runner (JProgressBar.)
       job-cancel (JButton. "Cancel")
       job-panel (JPanel.)]
@@ -756,7 +757,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 (. run-button (setEnabled false))
 (. (java.util.concurrent.Executors/newCachedThreadPool) (execute (fn [] 
 
-	   (. statusbar (setText " running cluster analysis ... this may take some time ..."))
+	   (. statusbar (setText "Running cluster analysis..."))
 	   (dosync (ref-set *K* (try (. Integer (parseInt (. numcluster-text (getText)))) (catch Exception e @*K*))))
 	   (. numcluster-text (setText (str @*K*)))
 	   (dosync (ref-set *MAXITER* (try (. Integer (parseInt (. maxiter-text (getText)))) (catch Exception e @*MAXITER*))))
@@ -804,9 +805,9 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 (. estimate-button (setEnabled false))
 (let [backgroundExec (java.util.concurrent.Executors/newCachedThreadPool)
       job-frame (JFrame. "Job running")
-      job-text (JTextField. "Running cluster number estimation. This may take a while ...")
+      job-text (JTextField. "Running cluster number estimation...")
       job-runner (JProgressBar.)
-      job-cancel (JButton. "Cancel")
+      job-cancel (JButton. "Stop!")
       job-panel (JPanel.)
 
 
@@ -832,7 +833,7 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 		 res (kmeans (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) bestk @*MAXITER* @*SNPMODE*)
 		 old (. plot-data (getSeriesCount))]
 	     (. boxplot-data (clear))
-	     (dorun (map #(.add boxplot-data %1 %2 %3) clusterresults (replicate len "McKmeans result") (iterate inc 2)))
+	     (dorun (map #(.add boxplot-data %1 %2 %3) clusterresults (replicate len "McKmeans") (iterate inc 2)))
 	     (dorun (map #(.add boxplot-data %1 %2 %3) baselineresults (replicate len "Random prototype baseline") (iterate inc 2)))
 	     (dosync (ref-set *K* bestk))
 	     (dosync (ref-set *RESULT* res))
