@@ -8,7 +8,7 @@
      :doc "Multi-core kmeans cluster application"}
   (:use (mckmeans kmeans utils cne)
 	clojure.contrib.command-line)
-  (:import (javax.swing JFrame JLabel JButton JPanel JMenuBar JMenu JMenuItem JFileChooser JTextField JCheckBox JTextArea JScrollPane JTabbedPane JOptionPane SwingUtilities GroupLayout JEditorPane JList DefaultListModel)
+  (:import (javax.swing JFrame JLabel JButton JPanel JMenuBar JMenu JMenuItem JFileChooser JTextField JCheckBox JTextArea JScrollPane JTabbedPane JOptionPane SwingUtilities GroupLayout JEditorPane JList DefaultListModel JProgressBar)
 	   (javax.swing.filechooser FileFilter)
 	   (javax.swing.event HyperlinkListener)
 	   (java.awt.event ActionListener KeyListener)
@@ -86,7 +86,9 @@
     (.. cluster-plot getRangeAxis (setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
     (.. cluster-plot getDomainAxis (setStandardTickUnits (NumberAxis/createIntegerTickUnits)))
     (.. cluster-plot getRangeAxis (setRange -0.5 2.5))
-   
+;;     (let [rend (. cluster-plot getRenderer)]
+;;       (map #(. rend (setSeriesPaint % Color/BLACK)) (range (. cluster-plot getSeriesCount))))
+
     cluster-plot))
 
 ;; plot-sammon
@@ -143,7 +145,7 @@
                <title>McKmeans Help</title>
                </head>
                <body>
-               <h1>McKmeans: A highly efficient multi-core k-means algorithm for clustering extremely large datasets.</h1>
+               <h1>McKmeans: A highly efficient multi-core k-means algorithm\nfor clustering extremely large datasets.</h1>
                <ul>
                <li><a href=\"help-usage\">Basic usage</a></li>
                <li><a href=\"help-load\">Input file format</a></li>
@@ -560,11 +562,48 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	(proxy [ActionListener] []
 	  (actionPerformed
 	   [evt]
+
+(let [job-frame (JFrame. "Job running")
+      job-text (JTextField. "Running cluster analysis. This may take a while ..." 100)
+      job-runner (JProgressBar.)
+      job-cancel (JButton. "Cancel")
+      job-panel (JPanel.)]
+  (. job-text (setEditable false))
+  (. job-runner (setIndeterminate true))
+  (. job-cancel
+    (addActionListener
+     (proxy [ActionListener] []
+       (actionPerformed 
+	[evt]
+	(. job-frame (dispose))))))
+  (doto job-panel
+    (. setLayout (FlowLayout.))
+    (. add job-runner)
+    (. add job-cancel))
+  (doto job-frame
+    (. setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)
+    (. setSize 10 100)
+    (. setLayout (BorderLayout.))
+    (. add job-text BorderLayout/NORTH)
+    (. add job-panel BorderLayout/CENTER)
+    (. pack)
+    (. setVisible true))
+
+(. sammon-button (setEnabled false))
+(. (java.util.concurrent.Executors/newCachedThreadPool) (execute (fn [] 
+
 	   (let [res (sammon (if @*TRANSPOSED* @*TDATASET* @*DATASET*) 10 2)]
 	     ; remove old plots
 	     (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc (. plot-data (getSeriesCount)))))))
 	     ; add new plots
-	     (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (data2plotdata res 0 1))))))))
+	     (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (data2plotdata res 0 1)))
+	     ;(. result-text (setText (reduce #(str (if-not (= nil %1) (str %1 "\n")) (str "Cluster " (inc %2) ": " (count (filter (fn [a] (= %2 a)) (:cluster @*RESULT*))))) nil (range @*K*))))
+	     (. result-text (setText (str (count (if @*TRANSPOSED* @*TDATASET* @*DATASET*)))))
+	     )
+
+(. sammon-button (setEnabled true))
+(. job-frame (dispose))))))
+))))
 
     (. info-sample-text (setBackground Color/lightGray))
     (. info-feature-text (setBackground Color/lightGray))
@@ -574,7 +613,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	  (actionPerformed 
 	   [evt]
 	   (dosync (ref-set *TRANSPOSED* (not @*TRANSPOSED*)))
-
+	   (. result-text (setText (str "Cluster 1: " (count (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*)))))
 	   (. info-sample-text (setText (str (count (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*)))))
 	   (. info-feature-text (setText (str (try (alength (first (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*))) (catch Exception e 0)))))
 
@@ -687,6 +726,36 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	(proxy [ActionListener] []
 	  (actionPerformed 
 	   [evt]
+
+(let [job-frame (JFrame. "Job running")
+      job-text (JTextField. "Running cluster analysis. This may take a while ..." 100)
+      job-runner (JProgressBar.)
+      job-cancel (JButton. "Cancel")
+      job-panel (JPanel.)]
+  (. job-text (setEditable false))
+  (. job-runner (setIndeterminate true))
+  (. job-cancel
+    (addActionListener
+     (proxy [ActionListener] []
+       (actionPerformed 
+	[evt]
+	(. job-frame (dispose))))))
+  (doto job-panel
+    (. setLayout (FlowLayout.))
+    (. add job-runner)
+    (. add job-cancel))
+  (doto job-frame
+    (. setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)
+    (. setSize 10 100)
+    (. setLayout (BorderLayout.))
+    (. add job-text BorderLayout/NORTH)
+    (. add job-panel BorderLayout/CENTER)
+    (. pack)
+    (. setVisible true))
+
+(. run-button (setEnabled false))
+(. (java.util.concurrent.Executors/newCachedThreadPool) (execute (fn [] 
+
 	   (. statusbar (setText " running cluster analysis ... this may take some time ..."))
 	   (dosync (ref-set *K* (try (. Integer (parseInt (. numcluster-text (getText)))) (catch Exception e @*K*))))
 	   (. numcluster-text (setText (str @*K*)))
@@ -712,22 +781,58 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 				   (recur (inc idx) (assoc ret (clusterres idx) (cons (data idx) (ret (clusterres idx)))))
 				   ret))]
 		   (doall (map #(. kmodes-combined-plot (add (create-kmodes-cluster-plot %))) datlist))))
-			       
-
-
-
+		
 	       (do (doall (map (fn [idx]
 				 (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
 		   (doall (map (fn [idx x]
 				 (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (make-plotdata (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*DIMX* @*DIMY* @*RESULT*)))))
+	     
+	     (. result-text (setText (reduce #(str (if-not (= nil %1) (str %1 "\n")) (str "Cluster " (inc %2) ": " (count (filter (fn [a] (= %2 a)) (:cluster @*RESULT*))))) nil (range @*K*))))
+	     (. statusbar (setText " finished clustering")))
 
-	     (. statusbar (setText " finished clustering")))))))
+(. run-button (setEnabled true))
+(. job-frame (dispose))
+
+	   ))))
+))))
 
     (. estimate-button
        (addActionListener
 	(proxy [ActionListener] []
 	  (actionPerformed
 	   [evt]
+
+(let [job-frame (JFrame. "Job running")
+      job-text (JTextField. "Running cluster number estimation. This may take a while ..." 100)
+      job-runner (JProgressBar.)
+      job-cancel (JButton. "Cancel")
+      job-panel (JPanel.)]
+  (. job-text (setEditable false))
+  (. job-runner (setIndeterminate true))
+  (. job-cancel
+    (addActionListener
+     (proxy [ActionListener] []
+       (actionPerformed 
+	[evt]
+	(. job-frame (dispose))))))
+  (doto job-panel
+    (. setLayout (FlowLayout.))
+    (. add job-runner)
+    (. add job-cancel))
+  (doto job-frame
+    (. setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)
+    (. setSize 10 100)
+    (. setLayout (BorderLayout.))
+    (. add job-text BorderLayout/NORTH)
+    (. add job-panel BorderLayout/CENTER)
+    (. pack)
+    (. setVisible true))
+
+
+(. estimate-button (setEnabled false))
+(. (java.util.concurrent.Executors/newCachedThreadPool) (execute (fn [] 
+
+
 	   (. statusbar (setText " running cluster number estimation ... this will take some time ..."))
 	   (dosync (ref-set *CNEMAX* (try (. Integer (parseInt (. estimate-k-text (getText)))) (catch Exception e 10))))
 	   (. estimate-k-text (setText (pr-str @*CNEMAX*)))
@@ -749,6 +854,8 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	     (dosync (ref-set *K* bestk))
 	     (dosync (ref-set *RESULT* res))
 	     (. numcluster-text (setText (pr-str @*K*)))
+
+	     (. result-text (setText (reduce #(str (if-not (= nil %1) (str %1 "\n")) (str "Cluster " (inc %2) ": " (count (filter (fn [a] (= %2 a)) (:cluster @*RESULT*))))) nil (range @*K*))))
 	     (. statusbar (setText " finished cluster number estimation"))
 	     
 	     (if @*SNPMODE*
@@ -770,7 +877,14 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 
 	       (do
 		 (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
-		 (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (make-plotdata (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*DIMX* @*DIMY* @*RESULT*))))))))))
+		 (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (make-plotdata (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*DIMX* @*DIMY* @*RESULT*))))))
+
+(. estimate-button (setEnabled true))
+(. job-frame (dispose))
+	   ))))
+))))
+
+
 
     (doto cluster-panel
       (. setLayout (new FlowLayout FlowLayout/LEFT 35 5))
@@ -827,10 +941,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	          ; add new plot
 		  (. kmodes-combined-plot (add (create-kmodes-cluster-plot (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*))))
 		  (. plot-panel (setChart kmodes-combined-chart))
-		  (. plot-panel (setRangeZoomable false))
-;		  (let [tt (. kmodes-combined-plot (getRenderer 0))]
-;		    (. tt (setSeriesPaint 0 Color/BLACK)))
-)
+		  (. plot-panel (setRangeZoomable false)))
 
 ;(JOptionPane/showMessageDialog nil (str ) "" JOptionPane/ERROR_MESSAGE)
 		(do ;show sammon-button
@@ -840,12 +951,12 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 		    (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
 		    (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (data2plotdata (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*DIMX* @*DIMY*)))))
 
-	      (. boxplot-data (clear)) 
-;	      (. result-text (setText ""))
+	      (. boxplot-data (clear))
+	      (. result-text (setText (str "Cluster 1: " (count dataset))))
 	      (. statusbar
 		 (setText " file loaded")))
-;	    (catch Exception e (JOptionPane/showMessageDialog nil (str e) "Error" JOptionPane/ERROR_MESSAGE)))))))
-	    (catch Exception e (JOptionPane/showMessageDialog nil "Error while loading file. See 'Help - File format'\nfor information about supported formats." "Error" JOptionPane/ERROR_MESSAGE)))))))
+	    (catch Exception e (JOptionPane/showMessageDialog nil (str e) "Error" JOptionPane/ERROR_MESSAGE)))))))
+;	    (catch Exception e (JOptionPane/showMessageDialog nil "Error while loading file. See 'Help - File format'\nfor information about supported formats." "Error" JOptionPane/ERROR_MESSAGE)))))))
 
     (. menu-file-save
        (addActionListener
@@ -948,7 +1059,8 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 ;(. result-list addElement (str "Cluster 0: "))
 (. result-text (setEditable false))
 (. result-text (setLineWrap true))
-(. result-text (setText "Cluster 0: \nCluster 1: \nCluster 2: \nCluster 3: \n"))
+;(. result-text (setText "Cluster 0: \nCluster 1: \nCluster 2: \nCluster 3: \n"))
+(. result-text (setText "Cluster 1:"))
 ;(doto result-text
 ;  (. setLayoutOrientation JList/VERTICAL)
 ;  (. setVisibleRowCount 1)
