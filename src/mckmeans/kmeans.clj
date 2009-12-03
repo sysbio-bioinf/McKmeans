@@ -67,7 +67,9 @@
   (if-not snp
     (let [dist (double-array (map #(distance (:data point) (:data (deref %))) cluster-agents))]
       (whichmin dist))
-    (let [dist (double-array (map #(distance-snp (:data point) (:data (deref %))) cluster-agents))]
+;;     (let [dist (double-array (map #(distance-snp (:data point) (:data (deref %))) cluster-agents))]
+;;       (whichmin dist))))
+    (let [dist (double-array (map #(distance-asd (:data point) (:data (deref %))) cluster-agents))]
       (whichmin dist))))
 
 

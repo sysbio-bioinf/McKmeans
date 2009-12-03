@@ -30,6 +30,14 @@
 ;	'(java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter))
 ;(use	'(clojure.contrib def duck-streams))
 
+(defn median
+  [x]
+  (let [n (int (count x))
+	y (sort x)]
+    (if (odd? n)
+      (nth y (/ n 2))
+      (/ (apply + (take 2 (drop (/ (- n 2) 2) y))) 2))))
+
 (defn split-string
   [#^String s #^String sc]
   (. s (split sc)))
@@ -134,9 +142,17 @@
 	   (+ ret (* (- (aget as i) (aget bs i)) (- (aget as i) (aget bs i))))))
 
 (defn distance-snp
+  "Simple matching distance for SNP data"
   [#^ints as #^ints bs]
   (areduce as i ret (int 0)
 	   (+ ret (Math/abs (Integer/signum (unchecked-subtract (aget as i) (aget bs i)))))))
+
+(defn distance-asd
+  "Allele sharing distance for SNP data"
+  [#^ints as #^ints bs]
+  (/ (areduce as i ret (int 0)
+	   (+ ret (Math/abs (unchecked-subtract (aget as i) (aget bs i)))))
+     (alength as)))
 
 (defn da+ 
   [#^doubles as #^doubles bs]

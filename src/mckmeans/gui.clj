@@ -1,3 +1,4 @@
+
 ;;;;
 ; File  : GUI for McKmeans application
 ; Author: Johann Kraus
@@ -22,7 +23,8 @@
 	   (org.jfree.chart.plot PlotOrientation CombinedDomainXYPlot)
 	   (org.apache.batik.dom GenericDOMImplementation)
 	   (org.apache.batik.svggen SVGGraphics2D)
-	   (org.w3c.dom DOMImplementation Document))
+	   (org.w3c.dom DOMImplementation Document)
+	   (javastat.inference.nonparametric RankSumTest))
   (:gen-class))
 
 ;;;; GLOBALS ;;;;
@@ -531,6 +533,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 ;	result-text (JList. result-list)
 	result-text (JTextArea. 2 15)
 	result-scrollpane (JScrollPane. result-text)
+	result-panel (new JPanel)
 
 ;	estimate-label (new JLabel " Change cluster number estimation parameters:")
 	estimate-k-label (JLabel. " Maximal number of clusters k:")
@@ -541,7 +544,10 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	estimate-maxiter-label (JLabel. " Maximal number of iterations:")
 	estimate-maxiter-text (JTextField. 7)
 
-	result-panel (new JPanel)
+        estimate-result-text (JTextField. 7)
+	estimate-result-label (JLabel. "P-value best clustering:")
+	estimate-result-k (JTextField. 7)
+	estimate-result-klabel (JLabel. "Best k clustering:")
 
 	statusbar (new JLabel " Welcome to the McKmeans cluster application ...")
 	file-chooser (JFileChooser.)
@@ -659,7 +665,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	     (let [fname (. f getName)
 		   idx (inc (. fname (lastIndexOf ".")))
 		   extension (. fname (substring idx))]
-	       (if (or (. extension equalsIgnoreCase "tab")
+	       (if (or (. extension equalsIgnoreCase "csv")
 		       (. extension equalsIgnoreCase "snp"))
 		 true
 		 false)))))))
@@ -833,15 +839,18 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 		 res (kmeans (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) bestk @*MAXITER* @*SNPMODE*)
 		 old (. plot-data (getSeriesCount))]
 	     (. boxplot-data (clear))
-	     (dorun (map #(.add boxplot-data %1 %2 %3) clusterresults (replicate len "McKmeans") (iterate inc 2)))
-	     (dorun (map #(.add boxplot-data %1 %2 %3) baselineresults (replicate len "Random prototype baseline") (iterate inc 2)))
+	     (dorun (map #(.add boxplot-data %1 %2 (if (= %3 bestk) (str %3 "*") %3)) clusterresults (replicate len "McKmeans") (iterate inc 2)))
+	     (dorun (map #(.add boxplot-data %1 %2 (if (= %3 bestk) (str %3 "*") %3)) baselineresults (replicate len "Random prototype baseline") (iterate inc 2)))
 	     (dosync (ref-set *K* bestk))
 	     (dosync (ref-set *RESULT* res))
 	     (. numcluster-text (setText (pr-str @*K*)))
 
 	     (. result-text (setText (reduce #(str (if-not (= nil %1) (str %1 "\n")) (str "Cluster " (inc %2) ": " (count (filter (fn [a] (= %2 a)) (:cluster @*RESULT*))))) nil (range @*K*))))
 	     (. statusbar (setText " finished cluster number estimation"))
-	     
+;(JOptionPane/showMessageDialog nil (str (vec (first clusterresults))) "" JOptionPane/ERROR_MESSAGE)
+	     (. estimate-result-k (setText (str bestk)))
+	     ;; rounding in java - WTF?
+	     (. estimate-result-text (setText (str (double (/ (Math/round (* 1000000 (. (RankSumTest. 0.05 "two.sided" (double-array (nth clusterresults (- bestk 2))) (double-array (nth baselineresults (- bestk 2)))) pValue))) 1000000)))))
 	     (if @*SNPMODE*
 	       (do
 		 ; remove old plots
@@ -929,7 +938,7 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 		  filename (. (. file-chooser (getSelectedFile)) (getPath))
 		  snp (. (. filename (substring (inc (. filename (lastIndexOf "."))))) (equalsIgnoreCase "snp"))
 		  ;dataset (load-tab-file filename snp)
-		  dataset (if-not snp (read-csv filename "\t" false csv-parse-double) (read-csv filename "\t" false csv-parse-int))
+		  dataset (if-not snp (read-csv filename "," false csv-parse-double) (read-csv filename "," false csv-parse-int))
 		  old (. plot-data (getSeriesCount))]
 	      (dosync (ref-set *SNPMODE* snp))
 	      (dosync (ref-set *DATASET* dataset))
@@ -963,8 +972,8 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 	      (. result-text (setText (str "Cluster 1: " (count dataset))))
 	      (. statusbar
 		 (setText " file loaded")))
-	    (catch Exception e (JOptionPane/showMessageDialog nil (str e) "Error" JOptionPane/ERROR_MESSAGE)))))))
-;	    (catch Exception e (JOptionPane/showMessageDialog nil "Error while loading file. See 'Help - File format'\nfor information about supported formats." "Error" JOptionPane/ERROR_MESSAGE)))))))
+;	    (catch Exception e (JOptionPane/showMessageDialog nil (str e) "Error" JOptionPane/ERROR_MESSAGE)))))))
+	    (catch Exception e (JOptionPane/showMessageDialog nil "Error while loading file. See 'Help - File format'\nfor information about supported formats." "Error" JOptionPane/ERROR_MESSAGE)))))))
 
     (. menu-file-save
        (addActionListener
@@ -1073,7 +1082,7 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 ;  (. setLayoutOrientation JList/VERTICAL)
 ;  (. setVisibleRowCount 1)
 ;  (. setSelectedIndex 0))
-		
+	
 		(let [layout (GroupLayout. kmeans-options-panel)
 		      parGrouplabelh (. layout (createParallelGroup))
 		      parGrouptexth (. layout (createParallelGroup))
@@ -1119,9 +1128,14 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 		  (. layout setVerticalGroup seqGroupv)
 		  (. kmeans-options-panel setLayout layout))
 
+(. estimate-result-text (setEditable false))
+(. estimate-result-k (setEditable false))
+
 		(let [layout (GroupLayout. cne-options-panel)
 		      parGrouplabelh (. layout (createParallelGroup))
 		      parGrouptexth (. layout (createParallelGroup))
+parGroupestimateh (. layout (createParallelGroup))
+parGroupestimatelabelh (. layout (createParallelGroup))
 		      parGrouplabelv (. layout (createParallelGroup))
 		      parGrouptextv (. layout (createParallelGroup))
 		      parGrouprunv (. layout (createParallelGroup))
@@ -1142,19 +1156,36 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
 		    (. addComponent estimate-button
 		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
+(doto parGroupestimateh
+  (. addComponent estimate-result-k)
+  (. addComponent estimate-result-text))
+
+(doto parGroupestimatelabelh
+  (. addComponent estimate-result-klabel)
+  (. addComponent estimate-result-label))
+
 		  (doto seqGrouph
 		    (. addGroup parGrouplabelh)
-		    (. addGroup parGrouptexth))
+		    (. addGroup parGrouptexth)
+(. addGroup parGroupestimatelabelh)
+(. addGroup parGroupestimateh))
 		  (. layout setHorizontalGroup seqGrouph)		  
 		  (doto parGrouplabelv
 		    (. addComponent estimate-k-label)
-		    (. addComponent estimate-k-text))
+		    (. addComponent estimate-k-text)
+(. addComponent estimate-result-klabel)
+(. addComponent estimate-result-k))
 		  (doto parGrouptextv
 		    (. addComponent estimate-maxiter-label)
-		    (. addComponent estimate-maxiter-text))
+		    (. addComponent estimate-maxiter-text)
+(. addComponent estimate-result-label)
+(. addComponent estimate-result-text))
 		  (doto parGrouprunv
 		    (. addComponent estimate-run-label)
 		    (. addComponent estimate-run-text))
+
+
+
 		  (doto seqGroupv
 		    (. addGroup parGrouplabelv)
 		    (. addGroup parGrouptextv)
@@ -1226,7 +1257,7 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 (defn runCMD [infile outfile k maxiter cne? cnemax cneruns cneoutfile]
   (dosync (ref-set *SNPMODE* (. (. infile (substring (inc (. infile (lastIndexOf "."))))) (equalsIgnoreCase "snp"))))
 ; (dosync (ref-set *DATASET* (load-tab-file infile @*SNPMODE*)))
-  (dosync (ref-set *DATASET* (if-not @*SNPMODE* (read-csv infile "\t" false csv-parse-double) (read-csv infile "\t" false csv-parse-int))))
+  (dosync (ref-set *DATASET* (if-not @*SNPMODE* (read-csv infile "," false csv-parse-double) (read-csv infile "," false csv-parse-int))))
   (if (string? k)
     (dosync (ref-set *K* (. Integer (parseInt k))))
     (dosync (ref-set *K* k)))

@@ -19,7 +19,8 @@
   [dat centers snpmode]
   (if-not snpmode
     (doall (pmap (fn [x] (whichmin (double-array (map #(distance x %) centers)))) dat))
-    (doall (pmap (fn [x] (whichmin (double-array (map #(distance-snp x %) centers)))) dat))))
+;;     (doall (pmap (fn [x] (whichmin (double-array (map #(distance-snp x %) centers)))) dat))))
+    (doall (pmap (fn [x] (whichmin (double-array (map #(distance-asd x %) centers)))) dat))))
 
 (defn jack [dat k maxiter leaveout snpmode]
   (let [size (int (count dat))
@@ -167,4 +168,5 @@
 (defn get-best-k
   ""
   [clusters baselines]
-  (+ 2 (whichmax (double-array (doall (map (fn [x y] (- (reduce + x) (reduce + y))) clusters baselines))))))
+;;  (+ 2 (whichmax (double-array (doall (map (fn [x y] (- (reduce + x) (reduce + y))) clusters baselines)))))) ; mean
+  (+ 2 (whichmax (double-array (doall (map (fn [x y] (- (median x) (median y))) clusters baselines)))))) ;median
