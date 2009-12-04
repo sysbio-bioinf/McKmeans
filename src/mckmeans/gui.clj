@@ -40,6 +40,7 @@
 (def *DIMY* (ref 1))
 (def *SNPMODE* (ref false))
 (def *BESTKRUNS* (ref 100))
+(def *NSTARTS* (ref 100))
 
 ;### only 2 dim plots; TODO improve via PCA
 (defn data2plotdata [dataset dimx dimy]
@@ -536,6 +537,8 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	numcluster-label (new JLabel " Number of clusters k:")
 	maxiter-text (new JTextField 7)
 	maxiter-label (new JLabel " Maximal number of iterations:")
+	nstart-label (JLabel. " Number of k-means restarts:")
+	nstart-text (JTextField. 7)
 
 	result-label (new JLabel " Number of elements per cluster:")
 ;	result-list (DefaultListModel.)
@@ -730,6 +733,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 
     (. numcluster-text (setText (pr-str @*K*)))
     (. maxiter-text (setText (pr-str @*MAXITER*)))
+    (. nstart-text (setText (str @*NSTARTS*)))
     (. numcluster-kmodes-text (setText (pr-str @*K*)))
     (. maxiter-kmodes-text (setText (pr-str @*MAXITER*)))
 
@@ -777,7 +781,9 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	   (. numcluster-text (setText (str @*K*)))
 	   (dosync (ref-set *MAXITER* (try (. Integer (parseInt (. maxiter-text (getText)))) (catch Exception e @*MAXITER*))))
 	   (. maxiter-text (setText (str @*MAXITER*)))
-	   (let [res (kmeans (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*K* @*MAXITER* @*SNPMODE*)
+	   (dosync (ref-set *NSTARTS* (try (. Integer (parseInt (. nstart-text (getText)))) (catch Exception e @*NSTARTS*))))
+	   (. nstart-text (setText (str @*NSTARTS*)))
+	   (let [res (if (< @*NSTARTS* 2) (kmeans (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*K* @*MAXITER* @*SNPMODE*) (nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*NSTARTS* @*K* @*MAXITER* @*SNPMODE*) 0))
 		 old (. plot-data (getSeriesCount))]
 	     (dosync (ref-set *RESULT* res))
 	     (if @*SNPMODE*
@@ -1097,17 +1103,21 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 		      parGrouptexth (. layout (createParallelGroup))
 		      parGrouplabelv (. layout (createParallelGroup))
 		      parGrouptextv (. layout (createParallelGroup))
+		      parGroupnstartv (. layout (createParallelGroup))
 		      seqGrouph (. layout (createSequentialGroup))
 		      seqGroupv (. layout (createSequentialGroup))]
 		  (. layout setAutoCreateGaps true)
 		  (. layout setAutoCreateContainerGaps true)
 		  (doto parGrouplabelh
 		    (. addComponent numcluster-label)
-		    (. addComponent maxiter-label))
+		    (. addComponent maxiter-label)
+		    (. addComponent nstart-label))
 		  (doto parGrouptexth
 		    (. addComponent numcluster-text
 		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
 		    (. addComponent maxiter-text 
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
+		    (. addComponent nstart-text
 		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
 		    (. addComponent run-button
 		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
@@ -1129,9 +1139,14 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 		    (. addComponent maxiter-label)
 		    (. addComponent maxiter-text
 		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
+		  (doto parGroupnstartv
+		    (. addComponent nstart-label)
+		    (. addComponent nstart-text
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
  		  (doto seqGroupv
  		    (. addGroup parGrouplabelv)
  		    (. addGroup parGrouptextv)
+		    (. addGroup parGroupnstartv)
  		    (. addComponent run-button))
 
 		  (. layout setVerticalGroup seqGroupv)
@@ -1249,7 +1264,7 @@ parGroupestimatelabelh (. layout (createParallelGroup))
 
 
 (defn runKmeans [outfile]
-  (let [res (kmeans @*DATASET* @*K* @*MAXITER* @*SNPMODE*)
+  (let [res (if (= 1 @*NSTARTS*) (kmeans (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*K* @*MAXITER* @*SNPMODE*) (nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*NSTARTS* @*K* @*MAXITER* @*SNPMODE*) 0))
 	restext (.. (pr-str (:cluster res)) (replace "(" "") (replace ")" ""))]
     (save-result outfile restext)))
 
@@ -1258,12 +1273,12 @@ parGroupestimatelabelh (. layout (createParallelGroup))
 	clusterresults (calculate-mca-results @*DATASET* @*ERUNS* ks @*MAXITER* @*SNPMODE*)
 	baselineresults (calculate-mca-baselines @*DATASET* @*ERUNS* ks @*SNPMODE*)
 	bestk (get-best-k clusterresults baselineresults)
-	res (kmeans @*DATASET* bestk @*MAXITER* @*SNPMODE*)
+	res (nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*BESTKRUNS* bestk @*MAXITER* @*SNPMODE*) 0)
 	restext (.. (pr-str (:cluster res)) (replace "(" "") (replace ")" ""))]
     (save-clusternumber-result clusterresults baselineresults cneoutfile)
     (save-result outfile restext)))
 
-(defn runCMD [infile outfile k maxiter cne? cnemax cneruns cneoutfile]
+(defn runCMD [infile outfile k maxiter nstart cne? cnemax cneruns cneoutfile]
   (dosync (ref-set *SNPMODE* (. (. infile (substring (inc (. infile (lastIndexOf "."))))) (equalsIgnoreCase "snp"))))
 ; (dosync (ref-set *DATASET* (load-tab-file infile @*SNPMODE*)))
   (dosync (ref-set *DATASET* (if-not @*SNPMODE* (read-csv infile "," false csv-parse-double) (read-csv infile "," false csv-parse-int))))
@@ -1273,6 +1288,9 @@ parGroupestimatelabelh (. layout (createParallelGroup))
   (if (string? maxiter)
     (dosync (ref-set *MAXITER* (. Integer (parseInt maxiter))))
     (dosync (ref-set *MAXITER* maxiter)))
+  (if (string? nstart)
+    (dosync (ref-set *NSTARTS* (. Integer (parseInt nstart))))
+    (dosync (ref-set *NSTARTS* nstart)))
   (if (string? cneruns)
     (dosync (ref-set *ERUNS* (. Integer (parseInt cneruns))))
     (dosync (ref-set *ERUNS* cneruns)))
@@ -1295,10 +1313,11 @@ parGroupestimatelabelh (. layout (createParallelGroup))
        [outfile o "The name of the output file." "clustering.txt"]
        [k "The number of clusters" 2]
        [maxiter "The maximum number of iterations allowed." 10]
+       [nstart "The number of K-means restarts. If set > 1 the best result from these repeated runs is reported." 1]
        [cne? "Run a cluster number estimation? This is a boolean flag."]
        [cnemax "The maximal number of clusters for the cluster number estimation." 10]
        [cneruns "The number of repeated runs of clusterings for each partitioning." 10]
        [cneoutfile co "The name of the output file for the cluster number estimation." "cne.txt"]]
       (if (nil? infile)
 	(println "Please provide a valid input file.")
-	(runCMD infile outfile k maxiter cne? cnemax cneruns cneoutfile)))))
+	(runCMD infile outfile k maxiter nstart cne? cnemax cneruns cneoutfile)))))
