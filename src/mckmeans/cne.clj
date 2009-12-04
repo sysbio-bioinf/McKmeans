@@ -170,3 +170,16 @@
   [clusters baselines]
 ;;  (+ 2 (whichmax (double-array (doall (map (fn [x y] (- (reduce + x) (reduce + y))) clusters baselines)))))) ; mean
   (+ 2 (whichmax (double-array (doall (map (fn [x y] (- (median x) (median y))) clusters baselines)))))) ;median
+
+(defn get-best-clustering
+  [dat nruns k maxiter snpmode]
+  (loop [run 0
+	 res Double/MAX_VALUE
+	 clusterres nil]
+    (if (= run nruns)
+      [clusterres res]
+      (let [kres (kmeans dat k maxiter snpmode)
+	    newres (double (wrapper-variance-criterion dat (:cluster kres) (:centers kres) snpmode))
+	    tmpres (double (if (< newres res) newres res))
+	    newclusterres (if (< newres res) kres clusterres)]
+	(recur (inc run) tmpres newclusterres)))))

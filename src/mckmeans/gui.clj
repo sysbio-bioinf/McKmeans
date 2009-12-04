@@ -39,6 +39,7 @@
 (def *DIMX* (ref 0))
 (def *DIMY* (ref 1))
 (def *SNPMODE* (ref false))
+(def *BESTKRUNS* (ref 100))
 
 ;### only 2 dim plots; TODO improve via PCA
 (defn data2plotdata [dataset dimx dimy]
@@ -243,13 +244,15 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 ;; options panel
 (defn show-preferences-panel
   []
-    (let [options-panel (JPanel.)
+  (let [options-panel (JPanel.)
 	options-frame (JFrame. "Preferences")
 	dim-label (new JLabel " Select columns to plot:")
 	dimx-label (new JLabel " dim x:")
 	dimy-label (new JLabel " dim y:")
 	dimx-text (new JTextField)
 	dimy-text (new JTextField)
+	bestkruns-label (JLabel. "Best clustering nstarts:")
+	bestkruns-text (JTextField. )
 	save-estimation (new JCheckBox "" false)
 	update-button (new JButton "Update")]
 
@@ -259,15 +262,18 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	  (actionPerformed [evt]
 			   (let [dimx (try (. Integer (parseInt (. dimx-text (getText)))) (catch Exception e @*DIMX*))
 				 dimy (try (. Integer (parseInt (. dimy-text (getText)))) (catch Exception e @*DIMY*))
-				 saveres (not (nil? (. save-estimation (getSelectedObjects))))]
+				 saveres (not (nil? (. save-estimation (getSelectedObjects))))
+				 bestkruns (try (. Integer (parseInt (. bestkruns-text (getText)))) (catch Exception e @*BESTKRUNS*))]
 			     (dosync (ref-set *DIMX* dimx))
 			     (dosync (ref-set *DIMY* dimy))
-			     (dosync (ref-set *SAVERES* saveres)))
+			     (dosync (ref-set *SAVERES* saveres))
+			     (dosync (ref-set *BESTKRUNS* bestkruns)))
 			   (. options-frame (dispose))))))
 
     (. dimx-text (setText (pr-str @*DIMX*)))
     (. dimy-text (setText (pr-str @*DIMY*)))
     (. save-estimation (setSelected @*SAVERES*))
+    (. bestkruns-text (setText (str @*BESTKRUNS*)))
     
     (doto options-panel
       (. setLayout (new GridLayout 4 3 5 5))
@@ -279,6 +285,9 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
       (. add (new JLabel ""))
       (. add dimx-text)
       (. add dimy-text)
+
+      (. add bestkruns-label)
+      (. add bestkruns-text)
 
       (. add (new JLabel "Save all results from cluster number estimation?"))
       (. add save-estimation)
@@ -836,7 +845,7 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 		 baselineresults (calculate-mca-baselines (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*ERUNS* ks @*SNPMODE*)
 		 len (count clusterresults)
 		 bestk (get-best-k clusterresults baselineresults)
-		 res (kmeans (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) bestk @*MAXITER* @*SNPMODE*)
+		 res (nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*BESTKRUNS* bestk @*MAXITER* @*SNPMODE*) 0)
 		 old (. plot-data (getSeriesCount))]
 	     (. boxplot-data (clear))
 	     (dorun (map #(.add boxplot-data %1 %2 (if (= %3 bestk) (str %3 "*") %3)) clusterresults (replicate len "McKmeans") (iterate inc 2)))

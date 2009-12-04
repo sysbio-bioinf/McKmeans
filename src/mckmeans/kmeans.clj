@@ -168,3 +168,18 @@
 	  (if (check-stop stop curiter maxiter)
 	    (struct kmeansresult (read-assignments data-agents) (read-centers cluster-agents) curiter)
 	    (recur (inc curiter))))))))
+
+(defn variance-criterion [member-lists centers snpmode]
+  (if-not snpmode
+    (apply + (map (fn [x y]  (apply + (map #(java.lang.Math/pow (distance %1 y) 2) x))) member-lists centers))
+    (apply + (map (fn [x y]  (apply + (map #(java.lang.Math/pow (distance-asd %1 y) 2) x))) member-lists centers))))
+  
+(defn wrapper-variance-criterion [data clusterres centers snpmode]
+  (let [k (count centers)
+	mem (loop [res (vec (replicate k nil))
+		   clu clusterres
+		   dat data]
+	      (if (empty? clu)
+		res 
+		(recur (assoc res (first clu) (cons (first dat) (nth res (first clu)))) (rest clu) (rest dat))))]
+    (variance-criterion mem centers snpmode)))
