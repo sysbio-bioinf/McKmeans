@@ -40,7 +40,7 @@
 (def *DIMY* (ref 1))
 (def *SNPMODE* (ref false))
 (def *BESTKRUNS* (ref 100))
-(def *NSTARTS* (ref 100))
+(def *NSTARTS* (ref 1))
 
 ;### only 2 dim plots; TODO improve via PCA
 (defn data2plotdata [dataset dimx dimy]
@@ -169,9 +169,9 @@
                <h2>Load data, transpose data</h2>
                First load a gene expression or SNP data set via 'File -> Load'. The required input file format is described <a href=\"help-load\">here</a>. Information about the number of rows and colums is displayed on the bottom right. The data is always clustered row-wise. The input data can be transposed to switch rows and columns by pressing the 'Transpose data set!' button. In case of gene expression data, the first two columns of the data set are displayed as a scatterplot in the plotting region. The columns to plot can be changed in the preferences menu 'File -> Preferences'. Alternatively, the data can be plotted as a 2-dimensional non-linear projection, see <a href=\"help-sammon\">Sammon's projection</a> for details. SNP data is displayed as a parallel coordinate plot.
                <h2>Cluster analysis</h2>
-Choose the number of clusters and the maximal number of iterations for the K-means algorithm. Clustering of SNP data uses a slightly different method for calculating distances, see <a href=\"online-help\">the online help</a> for more details. The clustering starts by clicking on the 'Cluster!' button. The cluster analysis may take a while, e.g. 25 minutes for clustering a data set containing 1000000 rows with 100 columns into 20 clusters on a dual-quad core computer. The resulting clustering is displayed in the plotting area. Additionally, the assignment vector can be saved via 'File -> Save'.
+Choose the number of clusters and the maximal number of iterations for the K-means algorithm. Optionally, choose the number of restarts for K-means. As K-means in initialized randomly, different runs of clustering can give different results. If more than one run of K-means is performed, the clustering with the minimal within-cluster sum of squares is given as result. Clustering of SNP data uses a slightly different method for calculating distances, see <a href=\"online-help\">the online help</a> for more details. The clustering starts by clicking on the 'Cluster!' button. The cluster analysis may take a while, e.g. 25 minutes for clustering a data set containing 1000000 rows with 100 columns into 20 clusters on a dual-quad core computer. The resulting clustering is displayed in the plotting area. Additionally, the assignment vector can be saved via 'File -> Save'.
                <h2>Cluster number estimation</h2>
-               Switch to the cluster number estimation panel by choosing the second tab in the main window. Choose the maximal number of clusters, the maximal number of iterations per clustering, and the maximal number of runs per clustering. Press 'Cluster number estimation' to start the process. Depending on data size, this may take several hours. The result is displayed in the boxplot area. Red boxes show the MCA-index from evaluating cluster results. Blue boxes show a random baseline for the MCA-index. The best number of clusters is reported for the number k with the largest difference between mean MCA-index from clustering and mean MCA-index from baseline evalution. It is also displayed on the cluster analysis tab.
+               Switch to the cluster number estimation panel by choosing the second tab in the main window. Choose the maximal number of clusters, the maximal number of iterations per clustering, and the maximal number of runs per clustering. Press 'Cluster number estimation' to start the process. Depending on data size, this may take several hours. The result is displayed in the boxplot area. Red boxes show the MCA-index from evaluating cluster results. Blue boxes show a random baseline for the MCA-index. The best number of clusters is reported for the number k with the largest difference between mean MCA-index from clustering and mean MCA-index from baseline evalution. The best clustering is computed by running 100 repeated clusterings for the best number of clusters k. The best solution (minimal within-cluster sum of squares) is displayed on the cluster analysis tab.
                </body>
                </html>"
 	help-load "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2//EN\"
@@ -409,69 +409,34 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
    (let [res (.. (pr-str (doall (map #(list (list %3 %1) (list %3 %2)) results baselines (iterate inc 2)))) (replace ") (" "\n") (replace "(" "") (replace ")" ""))]
      (save-result filename res)))
 
-(defn boxplot-clusternumber [results baselines]
+(defn boxplot-clusternumber [results baselines bestk filename]
   (let [dat (DefaultBoxAndWhiskerCategoryDataset.)
 	frame (JFrame. "Cluster number estimation")
 	chart (org.jfree.chart.ChartFactory/createBoxAndWhiskerChart "" "Cluster number" "MCA-index" dat true)
 	plot-panel (new ChartPanel chart)
-	len (count results)
-	
-	menubar (new JMenuBar)
-	menu-file (new JMenu "File")
-	menu-save (new JMenuItem "Save")
-	menu-export-svg (new JMenuItem "Export (SVG)")
+	len (count results)]
 
-	file-chooser (new JFileChooser)]
-
-    (do (.. chart getCategoryPlot getRenderer (setMaximumBarWidth 0.25))
-	(.. chart getCategoryPlot getRenderer (setFillBox true))
-	(.. chart getCategoryPlot getRenderer (setMeanVisible false))
-;	(.. chart getCategoryPlot (setDomainAxisLocation 2 AxisLocation/BOTTOM_OR_LEFT))
-	(.. chart getCategoryPlot getRangeAxis (setRange 0.0 1.05))
-;	(.. chart getCategoryPlot getDomainAxis (setLowerMargin 0.10))
-	(.. chart getCategoryPlot getDomainAxis (setCategoryMargin 0.4))
-	(.. chart getCategoryPlot (setDomainGridlinePosition CategoryAnchor/MIDDLE))
-	(.. chart getCategoryPlot (setDomainGridlinesVisible true))
-;	(.. chart getCategoryPlot (setAnchorValue 1.5))
-	(dorun (map #(.add dat %1 %2 %3) results (replicate len "McKmeans") (iterate inc 2)))
-	(dorun (map #(.add dat %1 %2 %3) baselines (replicate len "Random prototype baseline") (iterate inc 2)))
-
-
-	(. menu-export-svg
-	   (addActionListener
-	    (proxy [ActionListener] []
-	      (actionPerformed [evt]
-			       (try
-				(let [ret (. file-chooser (showSaveDialog frame))
-				      filename (. (. file-chooser (getSelectedFile)) (getPath))]
-				  (exportChart2SVG chart frame filename))
-				(catch Exception e nil))))))
-
-	(. menu-save
-	   (addActionListener
-	    (proxy [ActionListener] []
-	      (actionPerformed [evt]
-			       (try
-				(let [ret (. file-chooser (showSaveDialog frame))
-				      filename (. (. file-chooser (getSelectedFile)) (getPath))]
-				  (save-clusternumber-result results baselines filename))
-				(catch Exception e nil))))))
-				
-	(doto menu-file
-	  (. add menu-save)
-	  (. add menu-export-svg))
-
-	(doto menubar (. add menu-file))
-
-	(doto frame
-	  (. setSize 400 400)
-	  (. setJMenuBar menubar)
-	  (. setLayout (new BorderLayout))
-	  (. add plot-panel)
-	  (. pack)
-	  (. setVisible true))) ))
+    (.. chart getCategoryPlot getRenderer (setMaximumBarWidth 0.25))
+    (.. chart getCategoryPlot getRenderer (setFillBox true))
+    (.. chart getCategoryPlot getRenderer (setMeanVisible false))
+    (.. chart getCategoryPlot getRangeAxis (setRange 0.0 1.05))
+    (.. chart getCategoryPlot getDomainAxis (setCategoryMargin 0.4))
+    (.. chart getCategoryPlot (setDomainGridlinePosition CategoryAnchor/MIDDLE))
+    (.. chart getCategoryPlot (setDomainGridlinesVisible true))
     
-    ;;(doall (map #(- (.getMediaVailue dat "McKmeans result" %) (.getMedianValue dat "Random prototype baseline" %)) (iterate inc 2)))))
+    (dorun (map #(.add dat %1 %2 (if (= %3 bestk) (str %3 "*") %3)) results (replicate len "McKmeans") (iterate inc 2)))
+    (dorun (map #(.add dat %1 %2 (if (= %3 bestk) (str %3 "*") %3)) baselines (replicate len "Random prototype baseline") (iterate inc 2)))
+
+;    (dorun (map #(.add dat %1 %2 %3) results (replicate len "McKmeans") (iterate inc 2)))
+;    (dorun (map #(.add dat %1 %2 %3) baselines (replicate len "Random prototype baseline") (iterate inc 2)))
+
+    (doto frame
+      (. setSize 400 400)
+      (. setLayout (new BorderLayout))
+      (. add plot-panel)
+      (. pack))
+
+    (exportChart2SVG chart frame filename)))
 
 ;###
 (defn runGUI []
@@ -1268,7 +1233,7 @@ parGroupestimatelabelh (. layout (createParallelGroup))
 	restext (.. (pr-str (:cluster res)) (replace "(" "") (replace ")" ""))]
     (save-result outfile restext)))
 
-(defn runCNE [outfile cneoutfile]
+(defn runCNE [outfile cneoutfile cneplot cneplotfile]
   (let [ks (drop 2 (range (inc @*CNEMAX*)))
 	clusterresults (calculate-mca-results @*DATASET* @*ERUNS* ks @*MAXITER* @*SNPMODE*)
 	baselineresults (calculate-mca-baselines @*DATASET* @*ERUNS* ks @*SNPMODE*)
@@ -1276,9 +1241,11 @@ parGroupestimatelabelh (. layout (createParallelGroup))
 	res (nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*BESTKRUNS* bestk @*MAXITER* @*SNPMODE*) 0)
 	restext (.. (pr-str (:cluster res)) (replace "(" "") (replace ")" ""))]
     (save-clusternumber-result clusterresults baselineresults cneoutfile)
-    (save-result outfile restext)))
+    (save-result outfile restext)
+    (if cneplot
+      (boxplot-clusternumber clusterresults baselineresults bestk cneplotfile))))
 
-(defn runCMD [infile outfile k maxiter nstart cne? cnemax cneruns cneoutfile]
+(defn runCMD [infile outfile k maxiter nstart cne? cnemax cneruns cneoutfile cneplot cneplotfile]
   (dosync (ref-set *SNPMODE* (. (. infile (substring (inc (. infile (lastIndexOf "."))))) (equalsIgnoreCase "snp"))))
 ; (dosync (ref-set *DATASET* (load-tab-file infile @*SNPMODE*)))
   (dosync (ref-set *DATASET* (if-not @*SNPMODE* (read-csv infile "," false csv-parse-double) (read-csv infile "," false csv-parse-int))))
@@ -1299,7 +1266,7 @@ parGroupestimatelabelh (. layout (createParallelGroup))
     (dosync (ref-set *CNEMAX* cnemax)))
   (if cne?
     (do (println "Starting McKmeans cluster number estimation."); Find the output in " outfile " and " cneoutfile)
-	(runCNE outfile cneoutfile))
+	(runCNE outfile cneoutfile cneplot cneplotfile))
     (do (println "Starting McKmeans cluster analysis."); Find the output in " outfile)
 	(runKmeans outfile)))
   (System/exit 0))
@@ -1317,7 +1284,9 @@ parGroupestimatelabelh (. layout (createParallelGroup))
        [cne? "Run a cluster number estimation? This is a boolean flag."]
        [cnemax "The maximal number of clusters for the cluster number estimation." 10]
        [cneruns "The number of repeated runs of clusterings for each partitioning." 10]
-       [cneoutfile co "The name of the output file for the cluster number estimation." "cne.txt"]]
+       [cneoutfile co "The name of the output file for the cluster number estimation." "cneresult.txt"]
+       [cneplot? "Plot the result of the cluster number estimation to file? This is a boolean flag."]
+       [cneplotfile "The name of the plot file for boxplots from cluster number estimation." "cneplot.svg"]]
       (if (nil? infile)
 	(println "Please provide a valid input file.")
-	(runCMD infile outfile k maxiter nstart cne? cnemax cneruns cneoutfile)))))
+	(runCMD infile outfile k maxiter nstart cne? cnemax cneruns cneoutfile cneplot? cneplotfile)))))
