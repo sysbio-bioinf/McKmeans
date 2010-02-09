@@ -167,7 +167,7 @@
                <body>
                <h1>Basic usage</h1>
                <h2>Load data, transpose data</h2>
-               First load a gene expression or SNP data set via 'File -> Load'. The required input file format is described <a href=\"help-load\">here</a>. Information about the number of rows and colums is displayed on the bottom right. The data is always clustered row-wise. The input data can be transposed to switch rows and columns by pressing the 'Transpose data set!' button. In case of gene expression data, the first two columns of the data set are displayed as a scatterplot in the plotting region. The columns to plot can be changed in the preferences menu 'File -> Preferences'. Alternatively, the data can be plotted as a 2-dimensional non-linear projection, see <a href=\"help-sammon\">Sammon's projection</a> for details. SNP data is displayed as a parallel coordinate plot.
+               First load a gene expression or SNP data set via 'File -> Load'. The required input file format is described <a href=\"help-load\">here</a>. Information about the number of rows and colums is displayed on the bottom right. The data is always clustered row-wise. The input data can be transposed to switch rows and columns by pressing the 'Transpose data set!' button. In case of gene expression data, the first two columns of the data set are displayed as a scatterplot in the plotting region. The columns to plot can be changed in the text field of 'Column to plot vertically/horizontally'. Alternatively, the data can be plotted as a 2-dimensional non-linear projection, see <a href=\"help-sammon\">Sammon's projection</a> for details. SNP data is displayed as a parallel coordinate plot. To zoom in select a region with the mouse.
                <h2>Cluster analysis</h2>
 Choose the number of clusters and the maximal number of iterations for the K-means algorithm. Optionally, choose the number of restarts for K-means. As K-means in initialized randomly, different runs of clustering can give different results. If more than one run of K-means is performed, the clustering with the minimal within-cluster sum of squares is given as result. Clustering of SNP data uses a slightly different method for calculating distances, see <a href=\"online-help\">the online help</a> for more details. The clustering starts by clicking on the 'Cluster!' button. The cluster analysis may take a while, e.g. 25 minutes for clustering a data set containing 1000000 rows with 100 columns into 20 clusters on a dual-quad core computer. The resulting clustering is displayed in the plotting area. Additionally, the assignment vector can be saved via 'File -> Save'.
                <h2>Cluster number estimation</h2>
@@ -247,11 +247,11 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
   []
   (let [options-panel (JPanel.)
 	options-frame (JFrame. "Preferences")
-	dim-label (new JLabel " Select columns to plot:")
-	dimx-label (new JLabel " dim x:")
-	dimy-label (new JLabel " dim y:")
-	dimx-text (new JTextField)
-	dimy-text (new JTextField)
+;; 	dim-label (new JLabel " Select columns to plot:")
+;; 	dimx-label (new JLabel " dim x:")
+;; 	dimy-label (new JLabel " dim y:")
+;; 	dimx-text (new JTextField)
+;; 	dimy-text (new JTextField)
 	bestkruns-label (JLabel. "Best clustering nstarts:")
 	bestkruns-text (JTextField. )
 	save-estimation (new JCheckBox "" false)
@@ -261,31 +261,31 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
        (addActionListener
         (proxy [ActionListener] []
 	  (actionPerformed [evt]
-			   (let [dimx (try (. Integer (parseInt (. dimx-text (getText)))) (catch Exception e @*DIMX*))
-				 dimy (try (. Integer (parseInt (. dimy-text (getText)))) (catch Exception e @*DIMY*))
+			   (let [;; dimx (try (. Integer (parseInt (. dimx-text (getText)))) (catch Exception e @*DIMX*))
+				 ;; dimy (try (. Integer (parseInt (. dimy-text (getText)))) (catch Exception e @*DIMY*))
 				 saveres (not (nil? (. save-estimation (getSelectedObjects))))
 				 bestkruns (try (. Integer (parseInt (. bestkruns-text (getText)))) (catch Exception e @*BESTKRUNS*))]
-			     (dosync (ref-set *DIMX* dimx))
-			     (dosync (ref-set *DIMY* dimy))
+;; 			     (dosync (ref-set *DIMX* dimx))
+;; 			     (dosync (ref-set *DIMY* dimy))
 			     (dosync (ref-set *SAVERES* saveres))
 			     (dosync (ref-set *BESTKRUNS* bestkruns)))
 			   (. options-frame (dispose))))))
 
-    (. dimx-text (setText (pr-str @*DIMX*)))
-    (. dimy-text (setText (pr-str @*DIMY*)))
+;;     (. dimx-text (setText (pr-str @*DIMX*)))
+;;     (. dimy-text (setText (pr-str @*DIMY*)))
     (. save-estimation (setSelected @*SAVERES*))
     (. bestkruns-text (setText (str @*BESTKRUNS*)))
     
     (doto options-panel
-      (. setLayout (new GridLayout 4 3 5 5))
+      (. setLayout (new GridLayout 2 3 5 5))
       
-      (. add dim-label)
-      (. add dimx-label)
-      (. add dimy-label)
+;;       (. add dim-label)
+;;       (. add dimx-label)
+;;       (. add dimy-label)
 
-      (. add (new JLabel ""))
-      (. add dimx-text)
-      (. add dimy-text)
+;;       (. add (new JLabel ""))
+;;       (. add dimx-text)
+;;       (. add dimy-text)
 
       (. add bestkruns-label)
       (. add bestkruns-text)
@@ -467,7 +467,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	cne-options-panel (JPanel.)
 
 	plot-data (new DefaultXYDataset)
-	plot-area (. ChartFactory (createScatterPlot "" "dim x" "dim y" plot-data (. PlotOrientation VERTICAL) true false false))
+	plot-area (. ChartFactory (createScatterPlot "" "column 1" "column 2" plot-data (. PlotOrientation VERTICAL) true false false))
 	plot-panel (new ChartPanel plot-area)
 
 	kmodes-data (DefaultXYDataset.)
@@ -538,7 +538,14 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	info-feature-label (JLabel. "Number of columns:")
 	info-swap-button (JButton. "Transpose data!")
 
-	sammon-button (JButton. "Sammon mapping!")]
+	sammon-button (JButton. "Sammon mapping!")
+
+	dim-label (new JLabel " Select columns to plot:")
+	dimx-label (new JLabel " Column to plot horizontally: ")
+	dimy-label (new JLabel " Column to plot vertically: ")
+	dimx-text (new JTextField 7)
+	dimy-text (new JTextField 7)
+	dim-button (JButton. "Update columns to plot!")]
 
     (. sammon-button
        (addActionListener
@@ -596,6 +603,15 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	(proxy [ActionListener] []
 	  (actionPerformed 
 	   [evt]
+           (dosync (ref-set *RESULT* nil))
+           (dosync (ref-set *DIMX* 0))
+           (dosync (ref-set *DIMY* 1))
+           (. dimx-text (setText (str (inc @*DIMX*))))
+           (. dimy-text (setText (str (inc @*DIMY*))))
+           ;set axis label
+           (.. plot-area getXYPlot getDomainAxis (setLabel (str "column " (inc @*DIMX*))))
+           (.. plot-area getXYPlot getRangeAxis (setLabel (str "column " (inc @*DIMY*))))
+
 	   (dosync (ref-set *TRANSPOSED* (not @*TRANSPOSED*)))
 	   (. result-text (setText (str "Cluster 1: " (count (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*)))))
 	   (. info-sample-text (setText (str (count (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*)))))
@@ -924,6 +940,15 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 	      (dosync (ref-set *DATASET* dataset))
 	      (dosync (ref-set *TDATASET* (transpose dataset snp)))
 	      (dosync (ref-set *TRANSPOSED* false))
+              (dosync (ref-set *RESULT* nil))
+              (dosync (ref-set *DIMX* 0))
+              (dosync (ref-set *DIMY* 1))
+              (. dimx-text (setText (str (inc @*DIMX*))))
+              (. dimy-text (setText (str (inc @*DIMY*))))
+
+              ;set axis label
+              (.. plot-area getXYPlot getDomainAxis (setLabel (str "column " (inc @*DIMX*))))
+              (.. plot-area getXYPlot getRangeAxis (setLabel (str "column " (inc @*DIMY*))))
 
 	      (. info-sample-text (setText (str (count dataset))))
 	      (. info-feature-text (setText (str (alength (first dataset)))))
@@ -931,6 +956,12 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 	      (if @*SNPMODE*
 		(do ; hide sammon-button
 		  (. sammon-button (setVisible false))
+                  ; hide dimx, dimy selection
+                  (. dimx-label (setVisible false))
+                  (. dimy-label (setVisible false))
+                  (. dimx-text (setVisible false))
+                  (. dimy-text (setVisible false))
+                  (. dim-button (setVisible false))
 		  ; remove old plots
 		  (let [tmp (. kmodes-combined-plot (getSubplots))]
 		    (dotimes [i (. tmp (size))]
@@ -942,7 +973,14 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 
 ;(JOptionPane/showMessageDialog nil (str ) "" JOptionPane/ERROR_MESSAGE)
 		(do ;show sammon-button
-		  (. sammon-button (setVisible true)) 
+		  (. sammon-button (setVisible true))
+                  ; show dimx, dimy selection
+                  (. dimx-label (setVisible true))
+                  (. dimy-label (setVisible true))
+                  (. dimx-text (setVisible true))
+                  (. dimy-text (setVisible true))
+                  (. dim-button (setVisible true))
+
 		  (. plot-panel (setChart plot-area))
 		    (. plot-panel (setRangeZoomable true))
 		    (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
@@ -1062,13 +1100,41 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 ;  (. setLayoutOrientation JList/VERTICAL)
 ;  (. setVisibleRowCount 1)
 ;  (. setSelectedIndex 0))
-	
+
+(. dimx-text (setText (str (inc @*DIMX*))))
+(. dimy-text (setText (str (inc @*DIMY*))))
+(. dim-button
+   (addActionListener
+    (proxy [ActionListener] []
+      (actionPerformed
+       [evt]
+       (dosync (ref-set *DIMX* (try (let [newx (dec (. Integer (parseInt (. dimx-text (getText)))))]
+				      (if (or (< newx 0) (> newx (dec (. Integer (parseInt (. info-feature-text (getText))))))) @*DIMX* newx)) (catch Exception e @*DIMX*))))
+       (dosync (ref-set *DIMY* (try (let [newy (dec (. Integer (parseInt (. dimy-text (getText)))))]
+				      (if (or (< newy 0) (> newy (dec (. Integer (parseInt (. info-feature-text (getText))))))) @*DIMY* newy)) (catch Exception e @*DIMY*))))
+       (. dimx-text (setText (str (inc @*DIMX*))))
+       (. dimy-text (setText (str (inc @*DIMY*))))
+; set axis label
+(.. plot-area getXYPlot getDomainAxis (setLabel (str "column " (inc @*DIMX*))))
+(.. plot-area getXYPlot getRangeAxis (setLabel (str "column " (inc @*DIMY*))))
+; remove old plots
+       (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc (. plot-data (getSeriesCount)))))))
+; add new plots
+(if (= nil @*RESULT*)
+  (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (data2plotdata (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*DIMX* @*DIMY*)))
+  (doall (map (fn [idx x]
+		(doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (make-plotdata (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*DIMX* @*DIMY* @*RESULT*))))
+       ))))
+
 		(let [layout (GroupLayout. kmeans-options-panel)
 		      parGrouplabelh (. layout (createParallelGroup))
+		      parGrouplabel2h (. layout (createParallelGroup))
 		      parGrouptexth (. layout (createParallelGroup))
+		      parGrouptext2h (. layout (createParallelGroup))
 		      parGrouplabelv (. layout (createParallelGroup))
 		      parGrouptextv (. layout (createParallelGroup))
 		      parGroupnstartv (. layout (createParallelGroup))
+		      parGroupbuttonsv (. layout (createParallelGroup))
 		      seqGrouph (. layout (createSequentialGroup))
 		      seqGroupv (. layout (createSequentialGroup))]
 		  (. layout setAutoCreateGaps true)
@@ -1086,13 +1152,28 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
 		    (. addComponent run-button
 		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
+(doto parGrouplabel2h
+  (. addComponent result-label)
+  (. addComponent dimx-label)
+  (. addComponent dimy-label))
+(doto parGrouptext2h
+  (. addComponent result-scrollpane
+     GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
+  (. addComponent dimx-text
+     GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
+  (. addComponent dimy-text
+     GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
+  (. addComponent dim-button))
 		  (doto seqGrouph
 		    (. addGroup parGrouplabelh)
 		    (. addGroup parGrouptexth)
-		    (. addComponent result-label)
-		    (. addComponent result-scrollpane
-		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
+;		    (. addComponent result-label)
+;		    (. addComponent result-scrollpane
+;		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
+(. addGroup parGrouplabel2h)
+(. addGroup parGrouptext2h))
 		  (. layout setHorizontalGroup seqGrouph)
+
 		  (doto parGrouplabelv
 		    (. addComponent numcluster-label)
 		    (. addComponent numcluster-text
@@ -1103,17 +1184,26 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 		  (doto parGrouptextv
 		    (. addComponent maxiter-label)
 		    (. addComponent maxiter-text
-		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
+(. addComponent dimx-label)
+(. addComponent dimx-text
+   GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
 		  (doto parGroupnstartv
 		    (. addComponent nstart-label)
 		    (. addComponent nstart-text
-		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
+		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
+(. addComponent dimy-label)
+(. addComponent dimy-text
+   GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
+(doto parGroupbuttonsv
+  (. addComponent run-button)
+  (. addComponent dim-button))
  		  (doto seqGroupv
  		    (. addGroup parGrouplabelv)
  		    (. addGroup parGrouptextv)
 		    (. addGroup parGroupnstartv)
- 		    (. addComponent run-button))
-
+; 		    (. addComponent run-button)
+(. addGroup parGroupbuttonsv))
 		  (. layout setVerticalGroup seqGroupv)
 		  (. kmeans-options-panel setLayout layout))
 
