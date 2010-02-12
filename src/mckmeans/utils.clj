@@ -122,6 +122,10 @@
   [n k]
   (seq (. RandomSamplingAssistant (sampleArray k (int-array (range n))))))
 
+(defn sample-k
+  [n k]
+  (map #(+ (/ (/ n k) 2)  %) (take k (iterate #(+ (int (/ n k)) %) 0))))
+
 (defn whichmin
   [#^doubles xs]     
   (areduce xs i ret 0          

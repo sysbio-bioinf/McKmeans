@@ -22,17 +22,18 @@
 ;;     (doall (pmap (fn [x] (whichmin (double-array (map #(distance-snp x %) centers)))) dat))))
     (doall (pmap (fn [x] (whichmin (double-array (map #(distance-asd x %) centers)))) dat))))
 
-(defn jack [dat k maxiter leaveout snpmode]
+(defn jack [dat k maxiter nstarts leaveout snpmode]
   (let [size (int (count dat))
 	subsetidx (sample size (- size leaveout))
 	subset (doall (map #(nth dat %1) subsetidx))
-	kmeansres (kmeans subset k maxiter snpmode)]
+	;;(kmeans subset k maxiter snpmode)]
+	kmeansres (first (get-best-clustering subset nstarts k maxiter snpmode))]
     (predict-assignment dat (:centers kmeansres) snpmode)))
 
 (defn jackknife-kmeans
-  [dat nrun k maxiter leaveout snpmode]
+  [dat nrun k maxiter nstarts leaveout snpmode]
   (let [nrun (int nrun)]
-    (vec (doall (pmap (fn [_] (jack dat k maxiter leaveout snpmode)) (range nrun))))))
+    (vec (doall (pmap (fn [_] (jack dat k maxiter nstarts leaveout snpmode)) (range nrun))))))
 
 ;(defn jackknife-kmeans
 ;  "Do jackknife resampling nrun times. Each time calculate kmeans result for the whole dataset"
@@ -53,11 +54,11 @@
 
 (defn kloop-jackknife-kmeans
   "Do jackknife resampling nrun times for all k in ks"
-  [dat nrun ks maxiter snpmode]
+  [dat nrun ks maxiter nstarts snpmode]
   (let [size (int (count dat))
 	leaveout (min (. Math (ceil (. Math (sqrt size)))) (- size (apply max ks)))]
 ;    (vec (reverse (doall (pmap #(jackknife-kmeans dat nrun % maxiter leaveout snpmode) ks))))))
-    (vec (doall (pmap #(jackknife-kmeans dat nrun % maxiter leaveout snpmode) ks)))))
+    (vec (doall (pmap #(jackknife-kmeans dat nrun % maxiter nstarts leaveout snpmode) ks)))))
 
 ;(defn kloop-jackknife-kmeans
 ;  "Do jackknife resampling nrun times for all k in ks"
@@ -131,8 +132,8 @@
 
 (defn calculate-mca-results
   "Using jackknife resampling and evaluation via MCA-index to estimate the 'right' number of clusters"
-  [dat nrun ks maxiter snpmode]
-  (let [jacks (kloop-jackknife-kmeans dat nrun ks maxiter snpmode)]
+  [dat nrun ks maxiter nstarts snpmode]
+  (let [jacks (kloop-jackknife-kmeans dat nrun ks maxiter nstarts snpmode)]
     (doall (pmap (fn [x]
 		   (let [comb (pairwise-comb nrun)]
 		     (doall (pmap (fn [y]

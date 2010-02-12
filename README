@@ -4,7 +4,7 @@ HOWTO build
 
 1. start clojure:
 
-java -cp .:./classes:./src:lib/clojure.jar:lib/clojure-contrib.jar:lib/colt.jar:lib/lap.jar:lib/jcommon-1.0.16.jar:lib/jfreechart-1.0.13.jar:lib/batik-awt-util.jar:lib/batik-dom.jar:lib/batik-svggen.jar:lib/batik-util.jar:lib/batik-xml.jar clojure.lang.Repl
+java -cp .:./classes:./src:lib/clojure.jar:lib/clojure-contrib.jar:lib/colt.jar:lib/lap.jar:lib/jcommon-1.0.16.jar:lib/jfreechart-1.0.13.jar:lib/batik-awt-util.jar:lib/batik-dom.jar:lib/batik-svggen.jar:lib/batik-util.jar:lib/batik-xml.jar:lib/javastat_beta1.4.jar clojure.lang.Repl
 
 2. compile clojure code:
 
@@ -26,6 +26,7 @@ unzip lib/batik-dom.jar -d classes/.
 unzip lib/batik-svggen.jar -d classes/.
 unzip lib/batik-util.jar -d classes/.
 unzip lib/batik-xml.jar -d classes/.
+unzip lib/javastat_beta1.4.jar -d classes/.
 rm -rf classes/META-INF
 
 4. build jar:

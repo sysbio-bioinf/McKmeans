@@ -29,11 +29,14 @@
 	start (cons 0 (take (dec numagents) end))]
     (map #(init-data-agent %1 %2 dat) start end)))
 
+
 (defn init-centers
   "Initialize centers"
   [data k]
   (let [sam (sample (count data) k)]
+;;  (let [sam (sample-k (count data) k)]
     (map #(nth data %) sam)))
+
 
 (defn init-cluster-agent
   "Initialize a cluster agent with number and data"

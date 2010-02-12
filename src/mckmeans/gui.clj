@@ -41,6 +41,7 @@
 (def *SNPMODE* (ref false))
 (def *BESTKRUNS* (ref 100))
 (def *NSTARTS* (ref 1))
+(def *NSTARTSCNE* (ref 10))
 
 ;### only 2 dim plots; TODO improve via PCA
 (defn data2plotdata [dataset dimx dimy]
@@ -504,6 +505,8 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	maxiter-label (new JLabel " Maximal number of iterations:")
 	nstart-label (JLabel. " Number of k-means restarts:")
 	nstart-text (JTextField. 7)
+	nstartcne-label (JLabel. "Number of k-means restarts:")
+	nstartcne-text (JTextField. 7)
 
 	result-label (new JLabel " Number of elements per cluster:")
 ;	result-list (DefaultListModel.)
@@ -715,6 +718,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
     (. numcluster-text (setText (pr-str @*K*)))
     (. maxiter-text (setText (pr-str @*MAXITER*)))
     (. nstart-text (setText (str @*NSTARTS*)))
+    (. nstartcne-text (setText (str @*NSTARTSCNE*)))
     (. numcluster-kmodes-text (setText (pr-str @*K*)))
     (. maxiter-kmodes-text (setText (pr-str @*MAXITER*)))
 
@@ -826,9 +830,11 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 	   (. estimate-run-text (setText (pr-str @*ERUNS*)))
 	   (dosync (ref-set *MAXITER* (try (. Integer (parseInt (. estimate-maxiter-text (getText)))) (catch Exception e @*MAXITER*))))
 	   (. estimate-maxiter-text (setText (pr-str @*MAXITER*)))
+	   (dosync (ref-set *NSTARTSCNE* (try (. Integer (parseInt (. nstartcne-text (getText)))) (catch Exception e @*NSTARTSCNE*))))
+	   (. nstartcne-text (setText (str @*NSTARTSCNE*)))
 	   
 	   (let [ks (drop 2 (range (inc @*CNEMAX*)))
-		 clusterresults (calculate-mca-results (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*ERUNS* ks @*MAXITER* @*SNPMODE*)
+		 clusterresults (calculate-mca-results (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*ERUNS* ks @*MAXITER* @*NSTARTSCNE* @*SNPMODE*)
 		 baselineresults (calculate-mca-baselines (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*ERUNS* ks @*SNPMODE*)
 		 len (count clusterresults)
 		 bestk (get-best-k clusterresults baselineresults)
@@ -936,6 +942,7 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 		  ;dataset (load-tab-file filename snp)
 		  dataset (if-not snp (read-csv filename "," false csv-parse-double) (read-csv filename "," false csv-parse-int))
 		  old (. plot-data (getSeriesCount))]
+
 	      (dosync (ref-set *SNPMODE* snp))
 	      (dosync (ref-set *DATASET* dataset))
 	      (dosync (ref-set *TDATASET* (transpose dataset snp)))
@@ -945,7 +952,7 @@ running-task (. backgroundExec (submit #^Runnable (fn []
               (dosync (ref-set *DIMY* 1))
               (. dimx-text (setText (str (inc @*DIMX*))))
               (. dimy-text (setText (str (inc @*DIMY*))))
-
+;;(JOptionPane/showMessageDialog nil (str "hier") "" JOptionPane/ERROR_MESSAGE)
               ;set axis label
               (.. plot-area getXYPlot getDomainAxis (setLabel (str "column " (inc @*DIMX*))))
               (.. plot-area getXYPlot getRangeAxis (setLabel (str "column " (inc @*DIMY*))))
@@ -990,8 +997,8 @@ running-task (. backgroundExec (submit #^Runnable (fn []
 	      (. result-text (setText (str "Cluster 1: " (count dataset))))
 	      (. statusbar
 		 (setText " file loaded")))
-;	    (catch Exception e (JOptionPane/showMessageDialog nil (str e) "Error" JOptionPane/ERROR_MESSAGE)))))))
-	    (catch Exception e (JOptionPane/showMessageDialog nil "Error while loading file. See 'Help - File format'\nfor information about supported formats." "Error" JOptionPane/ERROR_MESSAGE)))))))
+	    (catch Exception e (JOptionPane/showMessageDialog nil (str e) "Error" JOptionPane/ERROR_MESSAGE)))))))
+;	    (catch Exception e (JOptionPane/showMessageDialog nil "Error while loading file. See 'Help - File format'\nfor information about supported formats." "Error" JOptionPane/ERROR_MESSAGE)))))))
 
     (. menu-file-save
        (addActionListener
@@ -1235,11 +1242,17 @@ parGroupestimatelabelh (. layout (createParallelGroup))
 		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
 		    (. addComponent estimate-button
 		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
+
 (doto parGroupestimateh
-  (. addComponent estimate-result-k)
-  (. addComponent estimate-result-text))
+  (. addComponent nstartcne-text
+     GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
+  (. addComponent estimate-result-k
+     GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
+  (. addComponent estimate-result-text
+     GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
 
 (doto parGroupestimatelabelh
+  (. addComponent nstartcne-label)
   (. addComponent estimate-result-klabel)
   (. addComponent estimate-result-label))
 
@@ -1252,16 +1265,19 @@ parGroupestimatelabelh (. layout (createParallelGroup))
 		  (doto parGrouplabelv
 		    (. addComponent estimate-k-label)
 		    (. addComponent estimate-k-text)
-(. addComponent estimate-result-klabel)
-(. addComponent estimate-result-k))
+(. addComponent nstartcne-label)
+(. addComponent nstartcne-text
+   GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
 		  (doto parGrouptextv
 		    (. addComponent estimate-maxiter-label)
 		    (. addComponent estimate-maxiter-text)
-(. addComponent estimate-result-label)
-(. addComponent estimate-result-text))
+(. addComponent estimate-result-klabel)
+(. addComponent estimate-result-k))
 		  (doto parGrouprunv
 		    (. addComponent estimate-run-label)
-		    (. addComponent estimate-run-text))
+		    (. addComponent estimate-run-text)
+(. addComponent estimate-result-label)
+(. addComponent estimate-result-text))
 
 
 
@@ -1313,8 +1329,8 @@ parGroupestimatelabelh (. layout (createParallelGroup))
 		  (. add info-panel (. BorderLayout SOUTH))
 ;			(. add result-panel (. BorderLayout SOUTH))
 		  (. pack)
-		  (. setDefaultCloseOperation JFrame/EXIT_ON_CLOSE)
-;		  (. setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)
+;		  (. setDefaultCloseOperation JFrame/EXIT_ON_CLOSE)
+		  (. setDefaultCloseOperation JFrame/DISPOSE_ON_CLOSE)
 		  (. setVisible true))))
 
 
@@ -1335,7 +1351,7 @@ parGroupestimatelabelh (. layout (createParallelGroup))
     (if cneplot
       (boxplot-clusternumber clusterresults baselineresults bestk cneplotfile))))
 
-(defn runCMD [infile outfile k maxiter nstart cne? cnemax cneruns cneoutfile cneplot cneplotfile]
+(defn runCMD [infile outfile k maxiter nstart cne? cnemax cneruns cnenstart cneoutfile cneplot cneplotfile]
   (dosync (ref-set *SNPMODE* (. (. infile (substring (inc (. infile (lastIndexOf "."))))) (equalsIgnoreCase "snp"))))
 ; (dosync (ref-set *DATASET* (load-tab-file infile @*SNPMODE*)))
   (dosync (ref-set *DATASET* (if-not @*SNPMODE* (read-csv infile "," false csv-parse-double) (read-csv infile "," false csv-parse-int))))
@@ -1354,6 +1370,9 @@ parGroupestimatelabelh (. layout (createParallelGroup))
   (if (string? cnemax)
     (dosync (ref-set *CNEMAX* (. Integer (parseInt cnemax))))
     (dosync (ref-set *CNEMAX* cnemax)))
+  (if (string? cnenstart)
+    (dosync (ref-set *NSTARTSCNE* (. Integer (parseInt nstart))))
+    (dosync (ref-set *NSTARTSCNE* cnenstart)))
   (if cne?
     (do (println "Starting McKmeans cluster number estimation."); Find the output in " outfile " and " cneoutfile)
 	(runCNE outfile cneoutfile cneplot cneplotfile))
@@ -1374,9 +1393,10 @@ parGroupestimatelabelh (. layout (createParallelGroup))
        [cne? "Run a cluster number estimation? This is a boolean flag."]
        [cnemax "The maximal number of clusters for the cluster number estimation." 10]
        [cneruns "The number of repeated runs of clusterings for each partitioning." 10]
+       [cnenstart "The number of K-means restarts in cluster number estimation. If set > 1 only the best result from these runs is included." 10]
        [cneoutfile co "The name of the output file for the cluster number estimation." "cneresult.txt"]
        [cneplot? "Plot the result of the cluster number estimation to file? This is a boolean flag."]
        [cneplotfile "The name of the plot file for boxplots from cluster number estimation." "cneplot.svg"]]
       (if (nil? infile)
 	(println "Please provide a valid input file.")
-	(runCMD infile outfile k maxiter nstart cne? cnemax cneruns cneoutfile cneplot? cneplotfile)))))
+	(runCMD infile outfile k maxiter nstart cne? cnemax cneruns cnenstart cneoutfile cneplot? cneplotfile)))))
