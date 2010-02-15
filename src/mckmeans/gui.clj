@@ -1341,7 +1341,7 @@ parGroupestimatelabelh (. layout (createParallelGroup))
 
 (defn runCNE [outfile cneoutfile cneplot cneplotfile]
   (let [ks (drop 2 (range (inc @*CNEMAX*)))
-	clusterresults (calculate-mca-results @*DATASET* @*ERUNS* ks @*MAXITER* @*SNPMODE*)
+	clusterresults (calculate-mca-results @*DATASET* @*ERUNS* ks @*MAXITER* @*NSTARTS* @*SNPMODE*)
 	baselineresults (calculate-mca-baselines @*DATASET* @*ERUNS* ks @*SNPMODE*)
 	bestk (get-best-k clusterresults baselineresults)
 	res (nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*BESTKRUNS* bestk @*MAXITER* @*SNPMODE*) 0)
@@ -1371,7 +1371,7 @@ parGroupestimatelabelh (. layout (createParallelGroup))
     (dosync (ref-set *CNEMAX* (. Integer (parseInt cnemax))))
     (dosync (ref-set *CNEMAX* cnemax)))
   (if (string? cnenstart)
-    (dosync (ref-set *NSTARTSCNE* (. Integer (parseInt nstart))))
+    (dosync (ref-set *NSTARTSCNE* (. Integer (parseInt cnenstart))))
     (dosync (ref-set *NSTARTSCNE* cnenstart)))
   (if cne?
     (do (println "Starting McKmeans cluster number estimation."); Find the output in " outfile " and " cneoutfile)
