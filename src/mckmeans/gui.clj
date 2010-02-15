@@ -1341,7 +1341,7 @@ parGroupestimatelabelh (. layout (createParallelGroup))
 
 (defn runCNE [outfile cneoutfile cneplot cneplotfile]
   (let [ks (drop 2 (range (inc @*CNEMAX*)))
-	clusterresults (calculate-mca-results @*DATASET* @*ERUNS* ks @*MAXITER* @*NSTARTS* @*SNPMODE*)
+	clusterresults (calculate-mca-results @*DATASET* @*ERUNS* ks @*MAXITER* @*NSTARTSCNE* @*SNPMODE*)
 	baselineresults (calculate-mca-baselines @*DATASET* @*ERUNS* ks @*SNPMODE*)
 	bestk (get-best-k clusterresults baselineresults)
 	res (nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*BESTKRUNS* bestk @*MAXITER* @*SNPMODE*) 0)
