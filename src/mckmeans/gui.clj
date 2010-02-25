@@ -800,82 +800,86 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 (. run-button (setEnabled true))
 (. job-frame (dispose))
 
-	   ))))
-))))
+	   ))))))))
 
-    (. estimate-button
-       (addActionListener
-	(proxy [ActionListener] []
-	  (actionPerformed
-	   [evt]
-(. estimate-button (setEnabled false))
-(let [backgroundExec (java.util.concurrent.Executors/newCachedThreadPool)
-      job-frame (JFrame. "Job running")
-      job-text (JTextField. "Running cluster number estimation...")
-      job-runner (JProgressBar.)
-      job-cancel (JButton. "Stop!")
-      job-panel (JPanel.)
+(. estimate-button
+   (addActionListener
+    (proxy [ActionListener] []
+      (actionPerformed
+       [evt]
+       (. estimate-button (setEnabled false))
+       (let [backgroundExec (java.util.concurrent.Executors/newCachedThreadPool)
+	     job-frame (JFrame. "Job running")
+	     job-text (JTextField. "Running cluster number estimation...")
+	     job-runner (JProgressBar.)
+	     job-cancel (JButton. "Stop!")
+	     job-panel (JPanel.)
 
+;;running-task (. backgroundExec (submit #^Runnable (fn []
+	     running-task (. backgroundExec 
+			     (submit 
+			      (cast Runnable 
+				    (fn []
+				      (. statusbar (setText " running cluster number estimation ... this will take some time ..."))
+				      (dosync (ref-set *CNEMAX* (try (. Integer (parseInt (. estimate-k-text (getText)))) (catch Exception e 10))))
+				      (. estimate-k-text (setText (pr-str @*CNEMAX*)))
+				      (dosync (ref-set *ERUNS* (try (. Integer (parseInt (. estimate-run-text (getText)))) (catch Exception e 10))))
+				      (. estimate-run-text (setText (pr-str @*ERUNS*)))
+				      (dosync (ref-set *MAXITER* (try (. Integer (parseInt (. estimate-maxiter-text (getText)))) (catch Exception e @*MAXITER*))))
+				      (. estimate-maxiter-text (setText (pr-str @*MAXITER*)))
+				      (dosync (ref-set *NSTARTSCNE* (try (. Integer (parseInt (. nstartcne-text (getText)))) (catch Exception e @*NSTARTSCNE*))))
+				      (. nstartcne-text (setText (str @*NSTARTSCNE*)))
+				      
+				      (let [ks (drop 2 (range (inc @*CNEMAX*)))
+					    clusterresults (calculate-mca-results (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*ERUNS* ks @*MAXITER* @*NSTARTSCNE* @*SNPMODE*)
+					    baselineresults (calculate-mca-baselines (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*ERUNS* ks @*SNPMODE*)
+					    len (count clusterresults)
+					    bestk (get-best-k clusterresults baselineresults)
+					    res (nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*BESTKRUNS* bestk @*MAXITER* @*SNPMODE*) 0)
+					    old (. plot-data (getSeriesCount))]
+					(. boxplot-data (clear))
+					(dorun (map #(.add boxplot-data %1 %2 (if (= %3 bestk) (str %3 "*") %3)) clusterresults (replicate len "McKmeans") (iterate inc 2)))
+					(dorun (map #(.add boxplot-data %1 %2 (if (= %3 bestk) (str %3 "*") %3)) baselineresults (replicate len "Random prototype baseline") (iterate inc 2)))
+					(dosync (ref-set *K* bestk))
+					(dosync (ref-set *RESULT* res))
+					(. numcluster-text (setText (pr-str @*K*)))
 
-
-running-task (. backgroundExec (submit #^Runnable (fn []
-	   
-	   
-
-
-	   (. statusbar (setText " running cluster number estimation ... this will take some time ..."))
-	   (dosync (ref-set *CNEMAX* (try (. Integer (parseInt (. estimate-k-text (getText)))) (catch Exception e 10))))
-	   (. estimate-k-text (setText (pr-str @*CNEMAX*)))
-	   (dosync (ref-set *ERUNS* (try (. Integer (parseInt (. estimate-run-text (getText)))) (catch Exception e 10))))
-	   (. estimate-run-text (setText (pr-str @*ERUNS*)))
-	   (dosync (ref-set *MAXITER* (try (. Integer (parseInt (. estimate-maxiter-text (getText)))) (catch Exception e @*MAXITER*))))
-	   (. estimate-maxiter-text (setText (pr-str @*MAXITER*)))
-	   (dosync (ref-set *NSTARTSCNE* (try (. Integer (parseInt (. nstartcne-text (getText)))) (catch Exception e @*NSTARTSCNE*))))
-	   (. nstartcne-text (setText (str @*NSTARTSCNE*)))
-	   
-	   (let [ks (drop 2 (range (inc @*CNEMAX*)))
-		 clusterresults (calculate-mca-results (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*ERUNS* ks @*MAXITER* @*NSTARTSCNE* @*SNPMODE*)
-		 baselineresults (calculate-mca-baselines (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*ERUNS* ks @*SNPMODE*)
-		 len (count clusterresults)
-		 bestk (get-best-k clusterresults baselineresults)
-		 res (nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*BESTKRUNS* bestk @*MAXITER* @*SNPMODE*) 0)
-		 old (. plot-data (getSeriesCount))]
-	     (. boxplot-data (clear))
-	     (dorun (map #(.add boxplot-data %1 %2 (if (= %3 bestk) (str %3 "*") %3)) clusterresults (replicate len "McKmeans") (iterate inc 2)))
-	     (dorun (map #(.add boxplot-data %1 %2 (if (= %3 bestk) (str %3 "*") %3)) baselineresults (replicate len "Random prototype baseline") (iterate inc 2)))
-	     (dosync (ref-set *K* bestk))
-	     (dosync (ref-set *RESULT* res))
-	     (. numcluster-text (setText (pr-str @*K*)))
-
-	     (. result-text (setText (reduce #(str (if-not (= nil %1) (str %1 "\n")) (str "Cluster " (inc %2) ": " (count (filter (fn [a] (= %2 a)) (:cluster @*RESULT*))))) nil (range @*K*))))
-	     (. statusbar (setText " finished cluster number estimation"))
+					(. result-text (setText (reduce #(str (if-not (= nil %1) (str %1 "\n")) (str "Cluster " (inc %2) ": " (count (filter (fn [a] (= %2 a)) (:cluster @*RESULT*))))) nil (range @*K*))))
+					(. statusbar (setText " finished cluster number estimation"))
 ;(JOptionPane/showMessageDialog nil (str (vec (first clusterresults))) "" JOptionPane/ERROR_MESSAGE)
-	     (. estimate-result-k (setText (str bestk)))
+					(. estimate-result-k (setText (str bestk)))
 	     ;; rounding in java - WTF?
-	     (. estimate-result-text (setText (str (double (/ (Math/round (* 1000000 (. (RankSumTest. 0.05 "two.sided" (double-array (nth clusterresults (- bestk 2))) (double-array (nth baselineresults (- bestk 2)))) pValue))) 1000000)))))
-	     (if @*SNPMODE*
-	       (do
-		 ; remove old plots
-		 (let [tmp (. kmodes-combined-plot (getSubplots))]
-		   (dotimes [i (. tmp (size))]
-		     (. kmodes-combined-plot (remove (. tmp (get 0))))))
-		 ; add new plots
-		 (let [clusterres (vec (:cluster res))
-		       data (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*)
-		       len (count data)
-		       datlist (loop [idx (int 0)
-				      ret (vec (replicate @*K* '()))]
-				 (if (< idx len)
-				   (recur (inc idx) (assoc ret (clusterres idx) (cons (data idx) (ret (clusterres idx)))))
-				   ret))]
-		   (doall (map #(. kmodes-combined-plot (add (create-kmodes-cluster-plot %))) datlist))))
 
-	       (do
-		 (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
-		 (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (make-plotdata (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*DIMX* @*DIMY* @*RESULT*))))))
-(. estimate-button (setEnabled true))
-(. job-frame (dispose))
-)))]
+					(try
+					 (let [rst (RankSumTest.)
+					       pval (.pValue rst (double-array (nth clusterresults (- bestk 2))) (double-array (nth baselineresults (- bestk 2))))
+					       pval-rd (double (/ (Math/round (* 1000000 pval)) 1000000))]
+					  (. estimate-result-text (setText (str pval-rd))))
+					 (catch Exception e (. estimate-result-text (setText (str "NA")))))
+
+					(if @*SNPMODE*
+					  (do
+					; remove old plots
+					    (let [tmp (. kmodes-combined-plot (getSubplots))]
+					      (dotimes [i (. tmp (size))]
+						(. kmodes-combined-plot (remove (. tmp (get 0))))))
+					; add new plots
+					    (let [clusterres (vec (:cluster res))
+						  data (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*)
+						  len (count data)
+						  datlist (loop [idx (int 0)
+								 ret (vec (replicate @*K* '()))]
+							    (if (< idx len)
+							      (recur (inc idx) (assoc ret (clusterres idx) (cons (data idx) (ret (clusterres idx)))))
+							      ret))]
+					      (doall (map #(. kmodes-combined-plot (add (create-kmodes-cluster-plot %))) datlist))))
+
+					  (do
+					    (doall (map (fn [idx] (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
+					    (doall (map (fn [idx x] (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (make-plotdata (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*DIMX* @*DIMY* @*RESULT*))))))
+					    
+				      (. estimate-button (setEnabled true))
+				      (. job-frame (dispose))))) )]
 
   (. job-text (setEditable false))
   (. job-runner (setIndeterminate true))
