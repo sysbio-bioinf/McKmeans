@@ -4,7 +4,8 @@
 ;;;;
 
 (ns mckmeans.kmeans
-  (:use mckmeans.utils clojure.contrib.seq-utils)
+;;  (:use mckmeans.utils clojure.contrib.seq-utils)
+  (:use mckmeans.utils clojure.contrib.seq)
   (:gen-class))
 
 ;(use '(clojure.contrib seq-utils))
@@ -35,6 +36,7 @@
   [data k]
   (let [sam (sample (count data) k)]
 ;;  (let [sam (sample-k (count data) k)]
+;(println (Thread/currentThread) "centers" sam)
     (map #(nth data %) sam)))
 
 
@@ -68,11 +70,11 @@
   "Search the number of the nearest center"
   [point cluster-agents snp]
   (if-not snp
-    (let [dist (double-array (map #(distance (:data point) (:data (deref %))) cluster-agents))]
+    (let [dist (double-array (doall (map #(distance (:data point) (:data (deref %))) cluster-agents)))]
       (whichmin dist))
 ;;     (let [dist (double-array (map #(distance-snp (:data point) (:data (deref %))) cluster-agents))]
 ;;       (whichmin dist))))
-    (let [dist (double-array (map #(distance-asd (:data point) (:data (deref %))) cluster-agents))]
+    (let [dist (double-array (doall (map #(distance-asd (:data point) (:data (deref %))) cluster-agents)))]
       (whichmin dist))))
 
 
@@ -97,6 +99,7 @@
   [stop data-agents cluster-agents member-refs snp]
   (dosync (ref-set stop '()))
   (dorun (map #(send % (fn [x] (update-data-agent x cluster-agents member-refs stop snp))) data-agents))
+;;(println (Thread/currentThread) "await data-agents")
   (apply await data-agents))
 
 ;;;; UPDATE ;;;;
@@ -123,6 +126,7 @@
   "Tell cluster-agents to update. Wait until all agents finished"
   [cluster-agents member-refs snp]
   (dorun (map #(send % (fn [x] (update-cluster-agent x member-refs snp))) cluster-agents))
+;;(println (Thread/currentThread) "await cluster-agents")
   (apply await cluster-agents))
 
 ;;;; KMEANS ;;;;
@@ -133,11 +137,11 @@
 
 (defn read-assignments
   [data-agents]
-  (flatten (for [da data-agents] (map #(:assignment %) @da))))
+  (doall (flatten (for [da data-agents] (map #(:assignment %) @da)))))
 
 (defn read-centers
   [cluster-agents]
-  (for [ca cluster-agents] (:data @ca)))
+  (doall (for [ca cluster-agents] (:data @ca))))
 
 (defn check-empty-clusters
   [member-refs]
@@ -146,18 +150,20 @@
 (defn kmeans
   "Run Kmeans"
   [dat k maxiter snp]
+;(println "start kmeans")
   (let [stop (init-stop)
 	data-agents (init-data-agents dat @*NUMAGENTS*)
 	cluster-agents (init-cluster-agents dat k)
 	member-refs (init-member-refs k)]
     (loop [curiter 0]
+;(println curiter)
       (assignment stop data-agents cluster-agents member-refs snp)
 			;(println (map #(empty? @%) member-refs))
 			;(println (reduce #(or %1 %2) (map #(empty? @%) member-refs)))
 			; if empty clusters -> restart kmeans with new clusters
       (if (check-empty-clusters member-refs)
 	(do
-;					(println "hier")
+;(println "re-init cluster centers")
 					; re-init cluster centers
 	  (dorun (map (fn [x y] (send x (fn [z w] (deref w)) y)) cluster-agents (init-cluster-agents dat k)))
 	  (apply await cluster-agents)
@@ -169,13 +175,18 @@
 ;					(println "da")
 	  (update cluster-agents member-refs snp)
 	  (if (check-stop stop curiter maxiter)
+(do
+;(println (Thread/currentThread) "finished clustering")
 	    (struct kmeansresult (read-assignments data-agents) (read-centers cluster-agents) curiter)
+)
 	    (recur (inc curiter))))))))
 
 (defn variance-criterion [member-lists centers snpmode]
   (if-not snpmode
-    (apply + (map (fn [x y]  (apply + (map #(java.lang.Math/pow (distance %1 y) 2) x))) member-lists centers))
-    (apply + (map (fn [x y]  (apply + (map #(java.lang.Math/pow (distance-asd %1 y) 2) x))) member-lists centers))))
+;    (apply + (map (fn [x y]  (apply + (map #(java.lang.Math/pow (distance %1 y) 2) x))) member-lists centers))
+;    (apply + (map (fn [x y]  (apply + (map #(java.lang.Math/pow (distance-asd %1 y) 2) x))) member-lists centers))))
+    (apply + (map (fn [x y] (apply + (map (fn [u] (let [d (distance u y)] (* d d))) x))) member-lists centers))
+    (apply + (map (fn [x y] (apply + (map (fn [u] (let [d (distance-asd u y)] (* d d))) x))) member-lists centers))))
   
 (defn wrapper-variance-criterion [data clusterres centers snpmode]
   (let [k (count centers)
@@ -198,4 +209,5 @@
 	    newres (double (wrapper-variance-criterion dat (:cluster kres) (:centers kres) snpmode))
 	    tmpres (double (if (< newres res) newres res))
 	    newclusterres (if (< newres res) kres clusterres)]
+;(println (Thread/currentThread) "done run" run)
 	(recur (inc run) tmpres newclusterres)))))

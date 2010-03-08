@@ -35,11 +35,12 @@
 (def *K* (ref 2))
 (def *MAXITER* (ref 10))
 (def *ERUNS* (ref 10))
+(def *CNEMIN* (ref 2))
 (def *CNEMAX* (ref 10))
 (def *DIMX* (ref 0))
 (def *DIMY* (ref 1))
 (def *SNPMODE* (ref false))
-(def *BESTKRUNS* (ref 100))
+(def *BESTKRUNS* (ref 10))
 (def *NSTARTS* (ref 1))
 (def *NSTARTSCNE* (ref 10))
 
@@ -66,7 +67,7 @@
   (map #(data2snpplotdata dataset %) snps))
 
 (defn assignments2plotdata [dataset dimx dimy ass]
-  (let [data (map (fn [x] (make-array (. Double TYPE) 2 (count (filter #(= x %) ass)))) (range @*K*))
+  (let [data (doall (map (fn [x] (make-array (. Double TYPE) 2 (count (filter #(= x %) ass)))) (range @*K*)))
 	ass (vec ass)
 	maxidx (count ass)]
     (loop [idx 0 idxs (replicate @*K* 0)]
@@ -76,7 +77,7 @@
 	      curdataidx (nth idxs curidx)]
 	  (aset-double (aget curdata 0) curdataidx (nth (nth dataset idx) dimx))
 	  (aset-double (aget curdata 1) curdataidx (nth (nth dataset idx) dimy))
-	  (recur (inc idx) (map (fn [x y] (if (= curidx y) (inc x) x)) idxs (iterate inc 0))))
+	  (recur (inc idx) (doall (map (fn [x y] (if (= curidx y) (inc x) x)) idxs (iterate inc 0)))))
 	data))))
 
 (defn make-plotdata [dataset dimx dimy result]
@@ -172,7 +173,7 @@
                <h2>Cluster analysis</h2>
 Choose the number of clusters and the maximal number of iterations for the K-means algorithm. Optionally, choose the number of restarts for K-means. As K-means in initialized randomly, different runs of clustering can give different results. If more than one run of K-means is performed, the clustering with the minimal within-cluster sum of squares is given as result. Clustering of SNP data uses a slightly different method for calculating distances, see <a href=\"online-help\">the online help</a> for more details. The clustering starts by clicking on the 'Cluster!' button. The cluster analysis may take a while, e.g. 25 minutes for clustering a data set containing 1000000 rows with 100 columns into 20 clusters on a dual-quad core computer. The resulting clustering is displayed in the plotting area. Additionally, the assignment vector can be saved via 'File -> Save'.
                <h2>Cluster number estimation</h2>
-               Switch to the cluster number estimation panel by choosing the second tab in the main window. Choose the maximal number of clusters, the maximal number of iterations per clustering, and the maximal number of runs per clustering. Press 'Cluster number estimation' to start the process. Depending on data size, this may take several hours. The result is displayed in the boxplot area. Red boxes show the MCA-index from evaluating cluster results. Blue boxes show a random baseline for the MCA-index. The best number of clusters is reported for the number k with the largest difference between mean MCA-index from clustering and mean MCA-index from baseline evalution. The best clustering is computed by running 100 repeated clusterings for the best number of clusters k. The best solution (minimal within-cluster sum of squares) is displayed on the cluster analysis tab.
+               Switch to the cluster number estimation panel by choosing the second tab in the main window. Choose the minimal number of clusters, maximal number of clusters, the maximal number of iterations per clustering, the maximal number of runs per clustering, and the maximal runs of repetitions of kmeans per clustering. Press 'Cluster number estimation' to start the process. Depending on data size, this may take several hours. The result is displayed in the boxplot area. Red boxes show the MCA-index from evaluating cluster results. Blue boxes show a random baseline for the MCA-index. The best number of clusters is reported for the number k with the largest difference between mean MCA-index from clustering and mean MCA-index from baseline evalution. The best clustering is computed by running 10 repeated clusterings (can be changed in the 'Preferences' dialog) for the best number of clusters k. The best solution (minimal within-cluster sum of squares) is displayed on the cluster analysis tab.
                </body>
                </html>"
 	help-load "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2//EN\"
@@ -517,8 +518,10 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 
 ;	estimate-label (new JLabel " Change cluster number estimation parameters:")
 	estimate-k-label (JLabel. " Maximal number of clusters k:")
+	estimate-kmin-label (JLabel. " Minimal number of clusters k:")
 	estimate-run-label (new JLabel " Number of resamplings per cluster:")
 	estimate-k-text (new JTextField 7)
+	estimate-kmin-text (new JTextField 7)
 	estimate-run-text (new JTextField 7)
 	estimate-button (new JButton "Run cluster number estimation!")
 	estimate-maxiter-label (JLabel. " Maximal number of iterations:")
@@ -723,6 +726,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
     (. maxiter-kmodes-text (setText (pr-str @*MAXITER*)))
 
     (. estimate-k-text (setText (pr-str @*CNEMAX*)))
+    (. estimate-kmin-text (setText (pr-str @*CNEMIN*)))
     (. estimate-run-text (setText (pr-str @*ERUNS*)))
     (. estimate-maxiter-text (setText (pr-str @*MAXITER*)))
 
@@ -793,7 +797,6 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 				 (doto plot-data (. removeSeries (str "cluster " idx)))) (drop 1 (range (inc old)))))
 		   (doall (map (fn [idx x]
 				 (doto plot-data (. addSeries (str "cluster " idx) x))) (iterate inc 1) (make-plotdata (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*DIMX* @*DIMY* @*RESULT*)))))
-	     
 	     (. result-text (setText (reduce #(str (if-not (= nil %1) (str %1 "\n")) (str "Cluster " (inc %2) ": " (count (filter (fn [a] (= %2 a)) (:cluster @*RESULT*))))) nil (range @*K*))))
 	     (. statusbar (setText " finished clustering")))
 
@@ -823,6 +826,8 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 				      (. statusbar (setText " running cluster number estimation ... this will take some time ..."))
 				      (dosync (ref-set *CNEMAX* (try (. Integer (parseInt (. estimate-k-text (getText)))) (catch Exception e 10))))
 				      (. estimate-k-text (setText (pr-str @*CNEMAX*)))
+				      (dosync (ref-set *CNEMIN* (try (. Integer (parseInt (. estimate-kmin-text (getText)))) (catch Exception e 2))))
+				      (. estimate-kmin-text (setText (pr-str @*CNEMIN*)))
 				      (dosync (ref-set *ERUNS* (try (. Integer (parseInt (. estimate-run-text (getText)))) (catch Exception e 10))))
 				      (. estimate-run-text (setText (pr-str @*ERUNS*)))
 				      (dosync (ref-set *MAXITER* (try (. Integer (parseInt (. estimate-maxiter-text (getText)))) (catch Exception e @*MAXITER*))))
@@ -830,7 +835,8 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 				      (dosync (ref-set *NSTARTSCNE* (try (. Integer (parseInt (. nstartcne-text (getText)))) (catch Exception e @*NSTARTSCNE*))))
 				      (. nstartcne-text (setText (str @*NSTARTSCNE*)))
 				      
-				      (let [ks (drop 2 (range (inc @*CNEMAX*)))
+				      (let [;;ks (drop 2 (range (inc @*CNEMAX*)))
+					    ks (drop @*CNEMIN* (range (inc @*CNEMAX*)))
 					    clusterresults (calculate-mca-results (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*ERUNS* ks @*MAXITER* @*NSTARTSCNE* @*SNPMODE*)
 					    baselineresults (calculate-mca-baselines (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*ERUNS* ks @*SNPMODE*)
 					    len (count clusterresults)
@@ -838,15 +844,17 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 					    res (nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*BESTKRUNS* bestk @*MAXITER* @*SNPMODE*) 0)
 					    old (. plot-data (getSeriesCount))]
 					(. boxplot-data (clear))
-					(dorun (map #(.add boxplot-data %1 %2 (if (= %3 bestk) (str %3 "*") %3)) clusterresults (replicate len "McKmeans") (iterate inc 2)))
-					(dorun (map #(.add boxplot-data %1 %2 (if (= %3 bestk) (str %3 "*") %3)) baselineresults (replicate len "Random prototype baseline") (iterate inc 2)))
+;;					(dorun (map #(.add boxplot-data %1 %2 (if (= %3 bestk) (str %3 "*") %3)) clusterresults (replicate len "McKmeans") (iterate inc 2)))
+;;					(dorun (map #(.add boxplot-data %1 %2 (if (= %3 bestk) (str %3 "*") %3)) baselineresults (replicate len "Random prototype baseline") (iterate inc 2)))
+					(dorun (map #(.add boxplot-data %1 %2 (if (= %3 bestk) (str %3 "*") %3)) clusterresults (replicate len "McKmeans") ks))
+					(dorun (map #(.add boxplot-data %1 %2 (if (= %3 bestk) (str %3 "*") %3)) baselineresults (replicate len "Random prototype baseline") ks))
 					(dosync (ref-set *K* bestk))
 					(dosync (ref-set *RESULT* res))
 					(. numcluster-text (setText (pr-str @*K*)))
 
 					(. result-text (setText (reduce #(str (if-not (= nil %1) (str %1 "\n")) (str "Cluster " (inc %2) ": " (count (filter (fn [a] (= %2 a)) (:cluster @*RESULT*))))) nil (range @*K*))))
 					(. statusbar (setText " finished cluster number estimation"))
-;(JOptionPane/showMessageDialog nil (str (vec (first clusterresults))) "" JOptionPane/ERROR_MESSAGE)
+(JOptionPane/showMessageDialog nil "start RankSumTest" "" JOptionPane/ERROR_MESSAGE)
 					(. estimate-result-k (setText (str bestk)))
 	     ;; rounding in java - WTF?
 
@@ -949,6 +957,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 
 	      (dosync (ref-set *SNPMODE* snp))
 	      (dosync (ref-set *DATASET* dataset))
+;;(JOptionPane/showMessageDialog nil (str "hier") "" JOptionPane/ERROR_MESSAGE)
 	      (dosync (ref-set *TDATASET* (transpose dataset snp)))
 	      (dosync (ref-set *TRANSPOSED* false))
               (dosync (ref-set *RESULT* nil))
@@ -1226,6 +1235,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 		      parGrouptexth (. layout (createParallelGroup))
 parGroupestimateh (. layout (createParallelGroup))
 parGroupestimatelabelh (. layout (createParallelGroup))
+parGroupkminv (. layout (createParallelGroup))
 		      parGrouplabelv (. layout (createParallelGroup))
 		      parGrouptextv (. layout (createParallelGroup))
 		      parGrouprunv (. layout (createParallelGroup))
@@ -1234,10 +1244,13 @@ parGroupestimatelabelh (. layout (createParallelGroup))
 		  (. layout setAutoCreateGaps true)
 		  (. layout setAutoCreateContainerGaps true)
 		  (doto parGrouplabelh
+(. addComponent estimate-kmin-label)
 		    (. addComponent estimate-k-label)
 		    (. addComponent estimate-maxiter-label)
 		    (. addComponent estimate-run-label))
 		  (doto parGrouptexth
+(. addComponent estimate-kmin-text
+   GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
 		    (. addComponent estimate-k-text
 		       GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE)
 		    (. addComponent estimate-maxiter-text 
@@ -1265,7 +1278,12 @@ parGroupestimatelabelh (. layout (createParallelGroup))
 		    (. addGroup parGrouptexth)
 (. addGroup parGroupestimatelabelh)
 (. addGroup parGroupestimateh))
-		  (. layout setHorizontalGroup seqGrouph)		  
+		  (. layout setHorizontalGroup seqGrouph)
+
+(doto parGroupkminv
+(. addComponent estimate-kmin-label)
+(. addComponent estimate-kmin-text
+   GroupLayout/PREFERRED_SIZE GroupLayout/DEFAULT_SIZE GroupLayout/PREFERRED_SIZE))
 		  (doto parGrouplabelv
 		    (. addComponent estimate-k-label)
 		    (. addComponent estimate-k-text)
@@ -1286,6 +1304,7 @@ parGroupestimatelabelh (. layout (createParallelGroup))
 
 
 		  (doto seqGroupv
+(. addGroup parGroupkminv)
 		    (. addGroup parGrouplabelv)
 		    (. addGroup parGrouptextv)
 		    (. addGroup parGrouprunv)
@@ -1344,18 +1363,26 @@ parGroupestimatelabelh (. layout (createParallelGroup))
     (save-result outfile restext)))
 
 (defn runCNE [outfile cneoutfile cneplot cneplotfile]
-  (let [ks (drop 2 (range (inc @*CNEMAX*)))
-	clusterresults (calculate-mca-results @*DATASET* @*ERUNS* ks @*MAXITER* @*NSTARTSCNE* @*SNPMODE*)
-	baselineresults (calculate-mca-baselines @*DATASET* @*ERUNS* ks @*SNPMODE*)
-	bestk (get-best-k clusterresults baselineresults)
-	res (nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*BESTKRUNS* bestk @*MAXITER* @*SNPMODE*) 0)
-	restext (.. (pr-str (:cluster res)) (replace "(" "") (replace ")" ""))]
+  (let [ks (drop @*CNEMIN* (range (inc @*CNEMAX*)))
+	clusterresults (do ;(println "start cluster loop")
+			   (calculate-mca-results @*DATASET* @*ERUNS* ks @*MAXITER* @*NSTARTSCNE* @*SNPMODE*))
+	baselineresults (do ;(println "start baseline loop")
+			    (calculate-mca-baselines @*DATASET* @*ERUNS* ks @*SNPMODE*))
+	bestk (do ;(println "get best k")
+		  (get-best-k clusterresults baselineresults))
+	res (do ;(println "get best clustering")
+		(nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*BESTKRUNS* bestk @*MAXITER* @*SNPMODE*) 0))
+	restext (do ;(println "formating result")
+		    (.. (pr-str (:cluster res)) (replace "(" "") (replace ")" "")))]
+;;    (println "save runs")
     (save-clusternumber-result clusterresults baselineresults cneoutfile)
+;;    (println "save best run")
     (save-result outfile restext)
+;;    (println "save plot")
     (if cneplot
       (boxplot-clusternumber clusterresults baselineresults bestk cneplotfile))))
 
-(defn runCMD [infile outfile k maxiter nstart cne? cnemax cneruns cnenstart cneoutfile cneplot cneplotfile]
+(defn runCMD [infile outfile k maxiter nstart cne? cnemin cnemax cneruns cnenstart cneoutfile cneplot cneplotfile]
   (dosync (ref-set *SNPMODE* (. (. infile (substring (inc (. infile (lastIndexOf "."))))) (equalsIgnoreCase "snp"))))
 ; (dosync (ref-set *DATASET* (load-tab-file infile @*SNPMODE*)))
   (dosync (ref-set *DATASET* (if-not @*SNPMODE* (read-csv infile "," false csv-parse-double) (read-csv infile "," false csv-parse-int))))
@@ -1371,6 +1398,9 @@ parGroupestimatelabelh (. layout (createParallelGroup))
   (if (string? cneruns)
     (dosync (ref-set *ERUNS* (. Integer (parseInt cneruns))))
     (dosync (ref-set *ERUNS* cneruns)))
+  (if (string? cnemin)
+    (dosync (ref-set *CNEMIN* (. Integer (parseInt cnemin))))
+    (dosync (ref-set *CNEMIN* cnemin)))
   (if (string? cnemax)
     (dosync (ref-set *CNEMAX* (. Integer (parseInt cnemax))))
     (dosync (ref-set *CNEMAX* cnemax)))
@@ -1395,6 +1425,7 @@ parGroupestimatelabelh (. layout (createParallelGroup))
        [maxiter "The maximum number of iterations allowed." 10]
        [nstart "The number of K-means restarts. If set > 1 the best result from these repeated runs is reported." 1]
        [cne? "Run a cluster number estimation? This is a boolean flag."]
+       [cnemin "The minimal number of clusters for the cluster number estimation." 2]
        [cnemax "The maximal number of clusters for the cluster number estimation." 10]
        [cneruns "The number of repeated runs of clusterings for each partitioning." 10]
        [cnenstart "The number of K-means restarts in cluster number estimation. If set > 1 only the best result from these runs is included." 10]

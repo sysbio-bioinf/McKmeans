@@ -4,9 +4,10 @@
 ;;;;
 
 (ns mckmeans.utils
-  (:use clojure.contrib.def clojure.contrib.duck-streams clojure.contrib.seq-utils)
+;;  (:use clojure.contrib.def clojure.contrib.duck-streams clojure.contrib.seq-utils)
+  (:use clojure.contrib.def clojure.contrib.io clojure.contrib.seq)
   (:import (cern.jet.random.sampling RandomSamplingAssistant)
-	   (java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter PrintWriter);)
+	   (java.io BufferedWriter BufferedReader FileWriter FileReader FileOutputStream OutputStreamWriter PrintWriter);)
 
 	   (javax.swing JFrame JLabel JButton JPanel JMenuBar JMenu JMenuItem JFileChooser JTextField JCheckBox JTextArea JScrollPane JTabbedPane JOptionPane SwingUtilities GroupLayout JEditorPane JList DefaultListModel)
 	   (javax.swing.filechooser FileFilter)
@@ -29,6 +30,16 @@
 ;(import '(cern.jet.random.sampling RandomSamplingAssistant)
 ;	'(java.io BufferedWriter FileWriter FileOutputStream OutputStreamWriter))
 ;(use	'(clojure.contrib def duck-streams))
+
+(defn remvec [x idxs]
+  "Remove elements in list idx from vector x"
+  (let [idxs (sort idxs)]
+  (vec (concat (subvec x 0 (first idxs))
+	       (loop [res '() ids idxs]
+		 (if (empty? (rest ids))
+		   res 
+		   (recur (concat res (subvec x (inc (first ids)) (second ids))) (rest ids))))
+	       (subvec x (inc (last idxs)))))))
 
 (defn median
   [x]
@@ -80,13 +91,47 @@
   [#^String s #^String sc]
   (let [string-array (.split s sc)]
      (double-array (map #(Double/parseDouble %) string-array))))
-  
+
 (defn read-csv
   [filename sc header csvparser]
   (let [lines (read-lines filename)
 	sc (list sc)]
 ;    (vec (doall (map #(apply csvparser % sc) (drop (if header 1 0) lines))))))
     (vec (doall (map #(apply csvparser % sc) (drop (if (. (first (first lines)) equals (first "#")) 1 0) lines))))))
+
+(comment
+(defn read-csv [#^String file-name sc header csvparser]
+  (with-open [r (-> file-name FileReader. BufferedReader.)]
+    (loop [das (transient []) l (.readLine r)]
+      (if (nil? l) ; if EOF -> return dvs
+	(persistent! das)
+	(recur (conj! das (csvparser l sc)) (.readLine r))))))
+)
+(comment
+(defn read-data [#^String file-name]
+  (with-open [r (-> file-name FileReader. BufferedReader.)]
+    (loop [dvs (transient []) dv (vector-of :double) buff (StringBuilder.)]
+      (let [i (.read r)]
+        (if (= -1 i) ; if EOF -> return dvs
+          (persistent! dvs)
+          (let [c (char i)]
+	    (cond
+;;	     (and (= \newline c) (> 0 (.length buff)))
+	     (= \newline c) (recur (if (> (.length buff) 0)
+				     (conj! dvs (conj dv (Double/parseDouble (str buff)))) ; if EOL add dv to vector of dvs
+				     dvs) ; if EOL and last line is empty
+				   (vector-of :double) (StringBuilder.))
+	     (= \, c) (recur dvs (conj dv (Double/parseDouble (str buff))) (StringBuilder.)) ; if separating character -> add value to dv
+	     :else (recur dvs dv (.append buff c)) ; else fill buffer with current value
+	     )))))))
+)
+
+
+
+
+
+
+
 
 (defn list-parse-csv
   [l #^String sc]
@@ -124,7 +169,7 @@
 
 (defn sample-k
   [n k]
-  (map #(+ (/ (/ n k) 2)  %) (take k (iterate #(+ (int (/ n k)) %) 0))))
+  (map #(int (+ (/ (/ n k) 2) % (* (/ n 100) (rand)))) (take k (iterate #(+ (int (/ n k)) %) 0))))
 
 (defn whichmin
   [#^doubles xs]     
@@ -207,6 +252,7 @@
 	  (recur (inc start) (inc (inc start)) (conj res [start counter]))
 	  (recur start (inc counter) (conj res [start counter])))))))
 
+(comment
 (defn transpose [dat snpmode]
   (let [nrow (int (count dat))
 	ncol (int (alength (first dat)))
@@ -219,6 +265,20 @@
 	(if-not snpmode
 	  (vec (doall (map #(double-array %) tran)))
 	  (vec (doall (map #(int-array %) tran))))))))
+)
+
+(defn transpose [dat snpmode]
+  (let [nrow (int (count dat))
+	ncol (int (alength (dat 0)))
+	tdat (make-array Double/TYPE ncol nrow)]
+    (dotimes [i nrow]
+      (dotimes [j ncol]
+	(aset (aget tdat j) i (aget (dat i) j))))
+    (into [] tdat)))
+
+
+
+
 
 (defmacro init-array [type init-fn & dims]
   (let [idxs (map (fn [_] (gensym)) dims)

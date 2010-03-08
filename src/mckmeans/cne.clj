@@ -4,7 +4,8 @@
 ;;;;
 
 (ns mckmeans.cne
-  (:use (clojure.contrib seq-utils def)
+;;  (:use (clojure.contrib seq-utils def)
+  (:use (clojure.contrib seq def)
 	(mckmeans utils kmeans))
   (:import (assignment AssignmentProblem HungarianAlgorithm))
   (:gen-class))
@@ -19,20 +20,26 @@
   [dat centers snpmode]
   (if-not snpmode
     (doall (pmap (fn [x] (whichmin (double-array (map #(distance x %) centers)))) dat))
-;;     (doall (pmap (fn [x] (whichmin (double-array (map #(distance-snp x %) centers)))) dat))))
+    ;;(doall (pmap (fn [x] (whichmin (double-array (map #(distance-snp x %) centers)))) dat))))
     (doall (pmap (fn [x] (whichmin (double-array (map #(distance-asd x %) centers)))) dat))))
 
 (defn jack [dat k maxiter nstarts leaveout snpmode]
   (let [size (int (count dat))
-	subsetidx (sample size (- size leaveout))
-	subset (doall (map #(nth dat %1) subsetidx))
+	subsetidx (sample size leaveout)
+	;;subset (doall (map #(nth dat %1) subsetidx))
+	subset (do ;(println (Thread/currentThread) "leaveout" subsetidx)
+		 (remvec dat subsetidx))
 	;;(kmeans subset k maxiter snpmode)]
-	kmeansres (first (get-best-clustering subset nstarts k maxiter snpmode))]
+	kmeansres (do
+;(println "kmeans with k=" k)
+		    (first (get-best-clustering subset nstarts k maxiter snpmode)))]
+;(println "predict assignment")
     (predict-assignment dat (:centers kmeansres) snpmode)))
 
 (defn jackknife-kmeans
   [dat nrun k maxiter nstarts leaveout snpmode]
   (let [nrun (int nrun)]
+;(println "pmap clustering with k=" k " nruns=" nrun)
     (vec (doall (pmap (fn [_] (jack dat k maxiter nstarts leaveout snpmode)) (range nrun))))))
 
 ;(defn jackknife-kmeans
@@ -57,8 +64,9 @@
   [dat nrun ks maxiter nstarts snpmode]
   (let [size (int (count dat))
 	leaveout (min (. Math (ceil (. Math (sqrt size)))) (- size (apply max ks)))]
-;    (vec (reverse (doall (pmap #(jackknife-kmeans dat nrun % maxiter leaveout snpmode) ks))))))
-    (vec (doall (pmap #(jackknife-kmeans dat nrun % maxiter nstarts leaveout snpmode) ks)))))
+					;(vec (reverse (doall (pmap #(jackknife-kmeans dat nrun % maxiter leaveout snpmode) ks))))))
+    ;;(vec (doall (pmap #(jackknife-kmeans dat nrun % maxiter nstarts leaveout snpmode) ks)))))
+    (vec (doall (map #(jackknife-kmeans dat nrun % maxiter nstarts leaveout snpmode) ks)))))
 
 ;(defn kloop-jackknife-kmeans
 ;  "Do jackknife resampling nrun times for all k in ks"
@@ -73,13 +81,14 @@
   ""
   [dat nrun ks snpmode]
   (let [size (count dat)]
-;    (vec (reverse (doall (pmap (fn [x]
-    (vec (doall (pmap (fn [x]
-				 (vec (doall (pmap (fn [_] 
-						     (let [centers (map #(nth dat %) (sample size x))]
-						       (predict-assignment dat centers snpmode)))
-;						   (range nrun))))) ks))))))
-						   (range nrun))))) ks)))))
+					;(vec (reverse (doall (pmap (fn [x]
+    ;;(vec (doall (pmap (fn [x]
+    (vec (doall (map (fn [x]
+			(vec (doall (pmap (fn [_] 
+					    (let [centers (map #(nth dat %) (sample size x))]
+					      (predict-assignment dat centers snpmode)))
+					  ;;(range nrun))))) ks))))))
+					  (range nrun))))) ks)))))
 
 ;(defn calculate-baselines
 ;  ""
@@ -133,7 +142,9 @@
 (defn calculate-mca-results
   "Using jackknife resampling and evaluation via MCA-index to estimate the 'right' number of clusters"
   [dat nrun ks maxiter nstarts snpmode]
+;(println "start cluster loop")
   (let [jacks (kloop-jackknife-kmeans dat nrun ks maxiter nstarts snpmode)]
+;(println "start evaluation")
     (doall (pmap (fn [x]
 		   (let [comb (pairwise-comb nrun)]
 		     (doall (pmap (fn [y]
@@ -151,7 +162,9 @@
 (defn calculate-mca-baselines
   ""
   [dat nrun ks snpmode]
+;(println "start baseline loop")
   (let [jacks (calculate-baselines dat nrun ks snpmode)]
+;(println "start evaluation")
     (doall (pmap (fn [x]
 		   (let [comb (pairwise-comb nrun)]
 		     (doall (pmap (fn [y]
