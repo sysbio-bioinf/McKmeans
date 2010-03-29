@@ -1,3 +1,9 @@
+This is source code for the multi-core Kmeans project.
+
+Authors:
+Johann M. Kraus
+Hans A. Kestler
+
 HOWTO build
 
 0. create directory called classes
