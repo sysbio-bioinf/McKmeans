@@ -9,7 +9,7 @@
      :doc "Multi-core kmeans cluster application"}
   (:use (mckmeans kmeans utils cne)
 	clojure.contrib.command-line)
-  (:import (javax.swing JFrame JLabel JButton JPanel JMenuBar JMenu JMenuItem JFileChooser JTextField JCheckBox JTextArea JScrollPane JTabbedPane JOptionPane SwingUtilities GroupLayout JEditorPane JList DefaultListModel JProgressBar)
+  (:import (javax.swing JFrame JLabel JButton JPanel JMenuBar JMenu JMenuItem JFileChooser JTextField JCheckBox JTextArea JScrollPane JTabbedPane JOptionPane SwingUtilities GroupLayout JEditorPane JList DefaultListModel JProgressBar JComboBox)
 	   (javax.swing.filechooser FileFilter)
 	   (javax.swing.event HyperlinkListener)
 	   (java.awt.event ActionListener KeyListener)
@@ -43,6 +43,7 @@
 (def *BESTKRUNS* (ref 10))
 (def *NSTARTS* (ref 1))
 (def *NSTARTSCNE* (ref 10))
+(def *DISTFUN* (ref "Euclidean"))
 
 ;### only 2 dim plots; TODO improve via PCA
 (defn data2plotdata [dataset dimx dimy]
@@ -257,7 +258,10 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	bestkruns-label (JLabel. "Best clustering nstarts:")
 	bestkruns-text (JTextField. )
 	save-estimation (new JCheckBox "" false)
+	distance-combo (new JComboBox (into-array '("Euclidean" "Manhattan")))
 	update-button (new JButton "Update")]
+
+    (. distance-combo (setSelectedIndex (if (.equals @*DISTFUN* "Euclidean") 0 1)))
 
     (. update-button
        (addActionListener
@@ -266,11 +270,13 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 			   (let [;; dimx (try (. Integer (parseInt (. dimx-text (getText)))) (catch Exception e @*DIMX*))
 				 ;; dimy (try (. Integer (parseInt (. dimy-text (getText)))) (catch Exception e @*DIMY*))
 				 saveres (not (nil? (. save-estimation (getSelectedObjects))))
-				 bestkruns (try (. Integer (parseInt (. bestkruns-text (getText)))) (catch Exception e @*BESTKRUNS*))]
+				 bestkruns (try (. Integer (parseInt (. bestkruns-text (getText)))) (catch Exception e @*BESTKRUNS*))
+				 distfun (. distance-combo (getSelectedItem))]
 ;; 			     (dosync (ref-set *DIMX* dimx))
 ;; 			     (dosync (ref-set *DIMY* dimy))
 			     (dosync (ref-set *SAVERES* saveres))
-			     (dosync (ref-set *BESTKRUNS* bestkruns)))
+			     (dosync (ref-set *BESTKRUNS* bestkruns))
+			     (dosync (ref-set *DISTFUN* distfun)))
 			   (. options-frame (dispose))))))
 
 ;;     (. dimx-text (setText (pr-str @*DIMX*)))
@@ -279,7 +285,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
     (. bestkruns-text (setText (str @*BESTKRUNS*)))
     
     (doto options-panel
-      (. setLayout (new GridLayout 2 3 5 5))
+      (. setLayout (new GridLayout 4 2 5 5))
       
 ;;       (. add dim-label)
 ;;       (. add dimx-label)
@@ -294,9 +300,10 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 
       (. add (new JLabel "Save all results from cluster number estimation?"))
       (. add save-estimation)
-      (. add (new JLabel ""))
 
-      (. add (new JLabel ""))
+      (. add (new JLabel "Choose distance function:"))
+      (. add distance-combo)
+
       (. add (new JLabel ""))
       (. add update-button))
 
@@ -772,7 +779,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 	   (. maxiter-text (setText (str @*MAXITER*)))
 	   (dosync (ref-set *NSTARTS* (try (. Integer (parseInt (. nstart-text (getText)))) (catch Exception e @*NSTARTS*))))
 	   (. nstart-text (setText (str @*NSTARTS*)))
-	   (let [res (if (< @*NSTARTS* 2) (kmeans (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*K* @*MAXITER* @*SNPMODE*) (nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*NSTARTS* @*K* @*MAXITER* @*SNPMODE*) 0))
+	   (let [res (if (< @*NSTARTS* 2) (kmeans (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*K* @*MAXITER* @*SNPMODE* @*DISTFUN*) (nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*NSTARTS* @*K* @*MAXITER* @*SNPMODE* @*DISTFUN*) 0))
 		 old (. plot-data (getSeriesCount))]
 	     (dosync (ref-set *RESULT* res))
 	     (if @*SNPMODE*
@@ -837,11 +844,11 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 				      
 				      (let [;;ks (drop 2 (range (inc @*CNEMAX*)))
 					    ks (drop @*CNEMIN* (range (inc @*CNEMAX*)))
-					    clusterresults (calculate-mca-results (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*ERUNS* ks @*MAXITER* @*NSTARTSCNE* @*SNPMODE*)
-					    baselineresults (calculate-mca-baselines (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*ERUNS* ks @*SNPMODE*)
+					    clusterresults (calculate-mca-results (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*ERUNS* ks @*MAXITER* @*NSTARTSCNE* @*SNPMODE* @*DISTFUN*)
+					    baselineresults (calculate-mca-baselines (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*ERUNS* ks @*SNPMODE* @*DISTFUN*)
 					    len (count clusterresults)
 					    bestk (get-best-k clusterresults baselineresults)
-					    res (nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*BESTKRUNS* bestk @*MAXITER* @*SNPMODE*) 0)
+					    res (nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*BESTKRUNS* bestk @*MAXITER* @*SNPMODE* @*DISTFUN*) 0)
 					    old (. plot-data (getSeriesCount))]
 					(. boxplot-data (clear))
 ;;					(dorun (map #(.add boxplot-data %1 %2 (if (= %3 bestk) (str %3 "*") %3)) clusterresults (replicate len "McKmeans") (iterate inc 2)))
@@ -854,7 +861,7 @@ Choose the number of clusters and the maximal number of iterations for the K-mea
 
 					(. result-text (setText (reduce #(str (if-not (= nil %1) (str %1 "\n")) (str "Cluster " (inc %2) ": " (count (filter (fn [a] (= %2 a)) (:cluster @*RESULT*))))) nil (range @*K*))))
 					(. statusbar (setText " finished cluster number estimation"))
-(JOptionPane/showMessageDialog nil "start RankSumTest" "" JOptionPane/ERROR_MESSAGE)
+;;(JOptionPane/showMessageDialog nil "start RankSumTest" "" JOptionPane/ERROR_MESSAGE)
 					(. estimate-result-k (setText (str bestk)))
 	     ;; rounding in java - WTF?
 
@@ -1358,20 +1365,20 @@ parGroupkminv (. layout (createParallelGroup))
 
 
 (defn runKmeans [outfile]
-  (let [res (if (= 1 @*NSTARTS*) (kmeans (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*K* @*MAXITER* @*SNPMODE*) (nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*NSTARTS* @*K* @*MAXITER* @*SNPMODE*) 0))
+  (let [res (if (= 1 @*NSTARTS*) (kmeans (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*K* @*MAXITER* @*SNPMODE* @*DISTFUN*) (nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*NSTARTS* @*K* @*MAXITER* @*SNPMODE* @*DISTFUN*) 0))
 	restext (.. (pr-str (:cluster res)) (replace "(" "") (replace ")" ""))]
     (save-result outfile restext)))
 
 (defn runCNE [outfile cneoutfile cneplot cneplotfile]
   (let [ks (drop @*CNEMIN* (range (inc @*CNEMAX*)))
 	clusterresults (do ;(println "start cluster loop")
-			   (calculate-mca-results @*DATASET* @*ERUNS* ks @*MAXITER* @*NSTARTSCNE* @*SNPMODE*))
+			   (calculate-mca-results @*DATASET* @*ERUNS* ks @*MAXITER* @*NSTARTSCNE* @*SNPMODE* @*DISTFUN*))
 	baselineresults (do ;(println "start baseline loop")
-			    (calculate-mca-baselines @*DATASET* @*ERUNS* ks @*SNPMODE*))
+			    (calculate-mca-baselines @*DATASET* @*ERUNS* ks @*SNPMODE* @*DISTFUN*))
 	bestk (do ;(println "get best k")
 		  (get-best-k clusterresults baselineresults))
 	res (do ;(println "get best clustering")
-		(nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*BESTKRUNS* bestk @*MAXITER* @*SNPMODE*) 0))
+		(nth (get-best-clustering (if-not @*TRANSPOSED* @*DATASET* @*TDATASET*) @*BESTKRUNS* bestk @*MAXITER* @*SNPMODE* @*DISTFUN*) 0))
 	restext (do ;(println "formating result")
 		    (.. (pr-str (:cluster res)) (replace "(" "") (replace ")" "")))]
 ;;    (println "save runs")

@@ -190,6 +190,11 @@
   (areduce as i ret (double 0)
 	   (+ ret (* (- (aget as i) (aget bs i)) (- (aget as i) (aget bs i))))))
 
+(defn distance-manhattan
+  [#^doubles as #^doubles bs]
+  (areduce as i ret (double 0)
+	   (+ ret (Math/abs (- (aget as i) (aget bs i))))))
+
 (defn distance-snp
   "Simple matching distance for SNP data"
   [#^ints as #^ints bs]
