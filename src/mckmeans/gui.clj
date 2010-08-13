@@ -1441,4 +1441,4 @@ parGroupkminv (. layout (createParallelGroup))
        [cneplotfile "The name of the plot file for boxplots from cluster number estimation." "cneplot.svg"]]
       (if (nil? infile)
 	(println "Please provide a valid input file.")
-	(runCMD infile outfile k maxiter nstart cne? cnemax cneruns cnenstart cneoutfile cneplot? cneplotfile)))))
+	(runCMD infile outfile k maxiter nstart cne? cnemin cnemax cneruns cnenstart cneoutfile cneplot? cneplotfile)))))
